@@ -1,3 +1,4 @@
-CCTV1
-CCTV2
-CCTV3
+📺央视频道,#genre#
+CCTV-1
+📡卫视频道,#genre#
+广东卫视
