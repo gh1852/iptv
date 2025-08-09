@@ -44,3 +44,9 @@ jobs:
       # Run the main script
       - name: Run script
         run: python main.py
+
+      - name: Commit and push if it changed
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: auto-update playlist.m3u"
+          file_pattern: playlist.m3u
