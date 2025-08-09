@@ -71,22 +71,25 @@ def analyze_stream(url):
 
 def process_channel(channel_info):
     """
-    Processes a single channel: fetches and analyzes streams.
+    Processes a single channel: fetches and analyzes all its valid streams.
     """
     channel_name, current_group_title = channel_info
     print(f"--- Searching for channel: {channel_name} ---", flush=True)
     stream_urls = get_stream_urls(channel_name)
+    valid_streams = []
     
     if stream_urls:
         for stream_url in stream_urls:
             if analyze_stream(stream_url):
-                # If a valid stream is found, format the M3U entry and return it
+                # If a valid stream is found, format the M3U entry and add it to our list.
                 extinf = f'#EXTINF:-1 tvg-id="{channel_name}" tvg-name="{channel_name}" tvg-logo="https://live.fanmingming.cn/tv/{channel_name}.png" group-title="{current_group_title}",{channel_name}'
                 print(f"--- Found valid stream for {channel_name} ---", flush=True)
-                return (extinf, stream_url)
+                valid_streams.append((extinf, stream_url))
     
-    print(f"--- No valid stream found for {channel_name} ---", flush=True)
-    return None
+    if not valid_streams:
+        print(f"--- No valid streams found for {channel_name} ---", flush=True)
+    
+    return valid_streams
 
 def main():
     """
@@ -125,9 +128,10 @@ def main():
         # executor.map processes the tasks in parallel and returns results in the same order as the tasks were submitted.
         results = executor.map(process_channel, tasks)
 
-        for result in results:
-            if result:
-                m3u_content.extend(result)
+        for channel_results in results:
+            # Each result is a list of valid streams for a channel.
+            for stream_info in channel_results:
+                m3u_content.extend(stream_info)
 
     # Write the M3U file
     if len(m3u_content) > 1:
