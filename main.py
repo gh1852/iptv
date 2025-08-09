@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import subprocess
 import os
+import concurrent.futures
 
 def get_stream_urls(channel):
     """
@@ -42,7 +43,7 @@ def analyze_stream(url):
             command, 
             capture_output=True, 
             text=True, 
-            timeout=30,
+            timeout=10,
             # Prevent creation of a new window on Windows
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
@@ -52,13 +53,10 @@ def analyze_stream(url):
         # Check for both Video and Audio streams in the ffmpeg output.
         output = result.stderr
         if "Stream #" in output and "Video:" in output and "Audio:" in output:
-            print(output, flush=True)
             print("--- Video and Audio streams found. ---", flush=True)
             return True
         else:
             print("No valid Video and Audio streams found.", flush=True)
-            if output:
-                print(output, flush=True)
             return False
 
     except subprocess.TimeoutExpired:
@@ -71,11 +69,30 @@ def analyze_stream(url):
         print(f"An error occurred while analyzing stream: {e}", flush=True)
         return False
 
+def process_channel(channel_info):
+    """
+    Processes a single channel: fetches and analyzes streams.
+    """
+    channel_name, current_group_title = channel_info
+    print(f"--- Searching for channel: {channel_name} ---", flush=True)
+    stream_urls = get_stream_urls(channel_name)
+    
+    if stream_urls:
+        for stream_url in stream_urls:
+            if analyze_stream(stream_url):
+                # If a valid stream is found, format the M3U entry and return it
+                extinf = f'#EXTINF:-1 tvg-id="{channel_name}" tvg-name="{channel_name}" tvg-logo="https://live.fanmingming.cn/tv/{channel_name}.png" group-title="{current_group_title}",{channel_name}'
+                print(f"--- Found valid stream for {channel_name} ---", flush=True)
+                return (extinf, stream_url)
+    
+    print(f"--- No valid stream found for {channel_name} ---", flush=True)
+    return None
+
 def main():
     """
     Main function to run the script.
     """
-    m3u_content = ["#EXTM3U"]
+    tasks = []
     try:
         current_group_title = "Default"
         with open('list.txt', 'r', encoding='utf-8') as f:
@@ -85,41 +102,40 @@ def main():
             print("list.txt is empty or not found.", flush=True)
             return
 
+        # First, parse the list.txt to create a list of tasks
         for line in lines:
             if line.endswith(',#genre#'):
                 current_group_title = line.replace(',#genre#', '').strip()
                 print(f"\n--- Switched to group: {current_group_title} ---", flush=True)
                 continue
-
+            
             channel_name = line
-            print(f"--- Searching for channel: {channel_name} ---", flush=True)
-            stream_urls = get_stream_urls(channel_name)
-            
-            found_valid_stream = False
-            if stream_urls:
-                for stream_url in stream_urls:
-                    if analyze_stream(stream_url):
-                        # Format the M3U entry using the current group title
-                        extinf = f'#EXTINF:-1 tvg-id="{channel_name}" tvg-name="{channel_name}" tvg-logo="https://live.fanmingming.cn/tv/{channel_name}.png" group-title="{current_group_title}",{channel_name}'
-                        m3u_content.append(extinf)
-                        m3u_content.append(stream_url)
-                        found_valid_stream = True
-            
-            if not found_valid_stream:
-                print(f"No valid stream found for {channel_name}", flush=True)
+            tasks.append((channel_name, current_group_title))
 
     except FileNotFoundError:
         print("Error: list.txt not found in the same directory as the script.", flush=True)
+        return
     except Exception as e:
-        print(f"An unexpected error occurred: {e}", flush=True)
-    finally:       
-        # Write the M3U file
-        if len(m3u_content) > 1:
-            with open('playlist.m3u', 'w', encoding='utf-8') as f:
-                f.write('\n'.join(m3u_content))
-            print("\nSuccessfully created playlist.m3u", flush=True)
-        else:
-            print("\nNo valid streams were found to create a playlist.", flush=True)
+        print(f"An unexpected error occurred during file reading: {e}", flush=True)
+        return
+
+    m3u_content = ["#EXTM3U"]
+    # You can adjust max_workers based on your network and CPU capacity. 10 is a safe default.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # executor.map processes the tasks in parallel and returns results in the same order as the tasks were submitted.
+        results = executor.map(process_channel, tasks)
+
+        for result in results:
+            if result:
+                m3u_content.extend(result)
+
+    # Write the M3U file
+    if len(m3u_content) > 1:
+        with open('playlist.m3u', 'w', encoding='utf-8') as f:
+            f.write('\n'.join(m3u_content))
+        print("\nSuccessfully created playlist.m3u", flush=True)
+    else:
+        print("\nNo valid streams were found to create a playlist.", flush=True)
 
 if __name__ == "__main__":
     main()
