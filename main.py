@@ -49,11 +49,16 @@ def analyze_stream(url):
         
         # ffmpeg often exits with a non-zero code when it's just probing,
         # so we print stderr regardless of the return code.
-        if result.stderr:
-            print(result.stderr, flush=True)
+        # Check for both Video and Audio streams in the ffmpeg output.
+        output = result.stderr
+        if "Stream #" in output and "Video:" in output and "Audio:" in output:
+            print(output, flush=True)
+            print("--- Video and Audio streams found. ---", flush=True)
             return True
         else:
-            print("No metadata found or stream is not responding.", flush=True)
+            print("No valid Video and Audio streams found.", flush=True)
+            if output:
+                print(output, flush=True)
             return False
 
     except subprocess.TimeoutExpired:
