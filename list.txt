@@ -1,11 +1,4 @@
 📺央视频道,#genre#
 CCTV-1
-CCTV-2
-CCTV-3
-CCTV-4
-CCTV-5
 📡卫视频道,#genre#
 广东卫视
-香港卫视
-浙江卫视
-湖南卫视
