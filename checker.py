@@ -1,0 +1,145 @@
+import requests
+from bs4 import BeautifulSoup
+import subprocess
+import os
+import concurrent.futures
+
+def get_stream_urls(channel):
+    """
+    Fetches the webpage and extracts stream URLs.
+    """
+    url = f"https://tonkiang.us/?iptv={channel}"
+    urls = []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        soup = BeautifulSoup(response.text, 'html.parser')
+        # Find all tags with <table>
+        for tag in soup.find_all('table'):
+            tbas = tag.find_all('tba')
+            if len(tbas) > 1:
+                urls.append(tbas[1].get_text().strip())
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching {url}: {e}", flush=True)
+    return urls
+
+def analyze_stream(url):
+    """
+    Uses ffmpeg to analyze the stream metadata.
+    """
+    print(f"\n--- Analyzing: {url} ---", flush=True)
+    try:
+        # Using ffprobe is often better for just getting info
+        # but ffmpeg with -i will also work and show metadata.
+        # We use -hide_banner to clean up the output a bit.
+        command = ['ffmpeg', '-hide_banner', '-i', url]
+        
+        # We run the command and capture stderr because ffmpeg prints info there.
+        # We set a timeout to avoid hanging on unresponsive streams.
+        result = subprocess.run(
+            command, 
+            capture_output=True, 
+            text=True, 
+            timeout=10,
+            # Prevent creation of a new window on Windows
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+        
+        # ffmpeg often exits with a non-zero code when it's just probing,
+        # so we print stderr regardless of the return code.
+        # Check for both Video and Audio streams in the ffmpeg output.
+        output = result.stderr
+        if "Stream #" in output and "Video:" in output and "Audio:" in output:
+            print("--- Video and Audio streams found. ---", flush=True)
+            return True
+        else:
+            print("No valid Video and Audio streams found.", flush=True)
+            return False
+
+    except subprocess.TimeoutExpired:
+        print("ffmpeg command timed out.", flush=True)
+        return False
+    except FileNotFoundError:
+        print("ffmpeg not found. Please ensure it is installed and in your system's PATH.", flush=True)
+        return False
+    except Exception as e:
+        print(f"An error occurred while analyzing stream: {e}", flush=True)
+        return False
+
+def process_channel(channel_info):
+    """
+    Processes a single channel: fetches and analyzes all its valid streams.
+    """
+    channel_name, current_group_title = channel_info
+    print(f"--- Searching for channel: {channel_name} ---", flush=True)
+    stream_urls = get_stream_urls(channel_name)
+    valid_streams = []
+    
+    if stream_urls:
+        for stream_url in stream_urls:
+            if analyze_stream(stream_url):
+                # If a valid stream is found, format the M3U entry and add it to our list.
+                extinf = f'#EXTINF:-1 tvg-id="{channel_name}" tvg-name="{channel_name}" tvg-logo="https://live.fanmingming.cn/tv/{channel_name}.png" group-title="{current_group_title}",{channel_name}'
+                print(f"--- Found valid stream for {channel_name} ---", flush=True)
+                valid_streams.append((extinf, stream_url))
+    
+    if not valid_streams:
+        print(f"--- No valid streams found for {channel_name} ---", flush=True)
+    
+    return valid_streams
+
+def main():
+    """
+    Main function to run the script.
+    """
+    tasks = []
+    try:
+        current_group_title = "Default"
+        with open('list.txt', 'r', encoding='utf-8') as f:
+            lines = [line.strip() for line in f if line.strip()]
+
+        if not lines:
+            print("list.txt is empty or not found.", flush=True)
+            return
+
+        # First, parse the list.txt to create a list of tasks
+        for line in lines:
+            if line.endswith(',#genre#'):
+                current_group_title = line.replace(',#genre#', '').strip()
+                print(f"\n--- Switched to group: {current_group_title} ---", flush=True)
+                continue
+            
+            channel_name = line
+            tasks.append((channel_name, current_group_title))
+
+    except FileNotFoundError:
+        print("Error: list.txt not found in the same directory as the script.", flush=True)
+        return
+    except Exception as e:
+        print(f"An unexpected error occurred during file reading: {e}", flush=True)
+        return
+
+    m3u_content = ["#EXTM3U"]
+    # You can adjust max_workers based on your network and CPU capacity. 10 is a safe default.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # executor.map processes the tasks in parallel and returns results in the same order as the tasks were submitted.
+        results = executor.map(process_channel, tasks)
+
+        for channel_results in results:
+            # Each result is a list of valid streams for a channel.
+            for stream_info in channel_results:
+                m3u_content.extend(stream_info)
+
+    # Write the M3U file
+    if len(m3u_content) > 1:
+        with open('playlist.m3u', 'w', encoding='utf-8') as f:
+            f.write('\n'.join(m3u_content))
+        print("\nSuccessfully created playlist.m3u", flush=True)
+    else:
+        print("\nNo valid streams were found to create a playlist.", flush=True)
+
+if __name__ == "__main__":
+    main()
