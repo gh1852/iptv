@@ -48,5 +48,6 @@ jobs:
       - name: Commit and push if it changed
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
+          branch: main
           commit_message: "chore: auto-update playlist.m3u"
           file_pattern: playlist.m3u
