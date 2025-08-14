@@ -46,7 +46,7 @@ jobs:
 
       # Run the main script
       - name: Run script
-        run: python checker.py
+        run: python main.py
 
       - name: Commit and push if it changed
         uses: stefanzweifel/git-auto-commit-action@v5
