@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IPTV</string>
+    <string name="categories">Categories</string>
+    <string name="channels">Channels</string>
+    <string name="channel_logo">Channel logo</string>
+    <string name="load_failed">Failed to load channels</string>
+    <string name="no_more_streams">No more stream URLs available for this channel</string>
+    <string name="category_other">Other</string>
+</resources>
