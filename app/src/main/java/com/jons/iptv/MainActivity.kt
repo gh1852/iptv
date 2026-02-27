@@ -368,22 +368,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildMediaItem(url: String): MediaItem {
-        val lower = url.lowercase()
-        val mimeType = when {
-            lower.contains(".m3u8") || lower.contains("format=m3u8") || lower.contains("type=hls") -> MimeTypes.APPLICATION_M3U8
-            lower.contains(".mpd") -> MimeTypes.APPLICATION_MPD
-            lower.contains(".ism") || lower.contains("manifest") && lower.contains("format=mpd") -> MimeTypes.APPLICATION_SS
-            else -> null
-        }
-
-        return if (mimeType != null) {
-            MediaItem.Builder()
-                .setUri(url)
-                .setMimeType(mimeType)
-                .build()
-        } else {
-            MediaItem.fromUri(url)
-        }
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .build()
     }
 
 
