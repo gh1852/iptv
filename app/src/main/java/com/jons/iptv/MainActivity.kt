@@ -1,6 +1,7 @@
 package com.jons.iptv
 
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
@@ -22,6 +23,10 @@ import com.jons.iptv.ui.ChannelAdapter
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var player: ExoPlayer
 
@@ -44,14 +49,35 @@ class MainActivity : AppCompatActivity() {
     private var currentStreamIndex: Int = 0
     private var overlayHideRunnable: Runnable? = null
     private var playbackFailureDialog: AlertDialog? = null
+    private var isSwitchingStream: Boolean = false
 
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             if (isFinishing || isDestroyed) return
             val channel = currentChannel ?: return
-            if (!tryPlayFrom(channel, currentStreamIndex + 1)) {
-                showPlaybackFailureDialog(channel)
+
+            val currentUrl = channel.streamUrls.getOrNull(currentStreamIndex)
+            Log.w(
+                TAG,
+                "Playback error channel=${channel.name}, index=$currentStreamIndex, url=$currentUrl, code=${error.errorCodeName}",
+                error
+            )
+
+            if (!shouldAutoSwitch(error)) {
+                Log.w(TAG, "Skip auto-switch for error code=${error.errorCodeName}")
+                return
             }
+
+            if (tryPlayFrom(channel, currentStreamIndex + 1)) {
+                if (!isSwitchingStream) {
+                    isSwitchingStream = true
+                    Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
+                }
+                return
+            }
+
+            isSwitchingStream = false
+            showPlaybackFailureDialog(channel)
         }
     }
 
@@ -159,6 +185,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playChannel(channel: Channel, streamIndex: Int) {
+        isSwitchingStream = false
         if (!tryPlayFrom(channel, streamIndex)) {
             showPlaybackFailureDialog(channel)
         }
@@ -254,6 +281,30 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.close, null)
             .show()
+            .also { dialog ->
+                val buttonColor = getColor(android.R.color.holo_blue_light)
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(buttonColor)
+                dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(buttonColor)
+            }
+    }
+
+    private fun shouldAutoSwitch(error: PlaybackException): Boolean {
+        return when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+            PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED -> true
+
+            else -> false
+        }
     }
 
     private fun showOverlay(channel: Channel) {
