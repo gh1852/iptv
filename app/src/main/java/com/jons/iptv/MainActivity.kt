@@ -1,5 +1,6 @@
 package com.jons.iptv
 
+import android.app.Dialog
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
@@ -10,7 +11,6 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -59,7 +59,7 @@ class MainActivity : AppCompatActivity() {
     private var currentChannel: Channel? = null
     private var currentStreamIndex: Int = 0
     private var overlayHideRunnable: Runnable? = null
-    private var playbackFailureDialog: AlertDialog? = null
+    private var playbackFailureDialog: Dialog? = null
     private var playbackFailureDialogAnimatedDismiss: Boolean = false
     private var isSwitchingStream: Boolean = false
     private var retriedChannelKey: String? = null
@@ -384,33 +384,31 @@ class MainActivity : AppCompatActivity() {
         val retryButton = dialogView.findViewById<TextView>(R.id.buttonRetry)
         val closeButton = dialogView.findViewById<TextView>(R.id.buttonClose)
 
-        playbackFailureDialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setCancelable(true)
-            .create()
-            .also { dialog ->
-                dialog.setOnDismissListener {
-                    if (playbackFailureDialog === dialog) {
-                        playbackFailureDialog = null
-                        playbackFailureDialogAnimatedDismiss = false
-                    }
-                }
-                dialog.show()
-                dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-                playDialogEnterAnimation(dialog)
-
-                retryButton.setOnClickListener {
-                    dismissPlaybackFailureDialog(dialog) {
-                        playChannel(channel, 0)
-                    }
-                }
-                closeButton.setOnClickListener {
-                    dismissPlaybackFailureDialog(dialog)
+        playbackFailureDialog = Dialog(this).apply {
+            setContentView(dialogView)
+            setCancelable(true)
+            window?.setBackgroundDrawableResource(android.R.color.transparent)
+            setOnDismissListener {
+                if (playbackFailureDialog === this) {
+                    playbackFailureDialog = null
+                    playbackFailureDialogAnimatedDismiss = false
                 }
             }
+            show()
+            playDialogEnterAnimation(this)
+
+            retryButton.setOnClickListener {
+                dismissPlaybackFailureDialog(this) {
+                    playChannel(channel, 0)
+                }
+            }
+            closeButton.setOnClickListener {
+                dismissPlaybackFailureDialog(this)
+            }
+        }
     }
 
-    private fun playDialogEnterAnimation(dialog: AlertDialog) {
+    private fun playDialogEnterAnimation(dialog: Dialog) {
         val decorView = dialog.window?.decorView ?: return
         val content = decorView.findViewById<View>(android.R.id.content) ?: decorView
         content.animate().cancel()
@@ -426,7 +424,7 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
-    private fun dismissPlaybackFailureDialog(dialog: AlertDialog, onDismissed: (() -> Unit)? = null) {
+    private fun dismissPlaybackFailureDialog(dialog: Dialog, onDismissed: (() -> Unit)? = null) {
         if (playbackFailureDialogAnimatedDismiss) return
         val decorView = dialog.window?.decorView
         val content = decorView?.findViewById<View>(android.R.id.content) ?: decorView
@@ -453,6 +451,7 @@ class MainActivity : AppCompatActivity() {
             }
             .start()
     }
+
 
     private fun shouldAutoSwitch(error: PlaybackException): Boolean {
         return when (error.errorCode) {
