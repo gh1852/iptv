@@ -7,7 +7,8 @@
     android:orientation="horizontal">
 
     <LinearLayout
-        android:layout_width="320dp"
+        android:id="@+id/menuContainer"
+        android:layout_width="420dp"
         android:layout_height="match_parent"
         android:background="@color/panel_background"
         android:orientation="vertical"
@@ -21,17 +22,36 @@
             android:textColor="@android:color/white"
             android:textStyle="bold" />
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/channelRecycler"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/categoryRecycler"
+                android:layout_width="180dp"
+                android:layout_height="match_parent"
+                android:nextFocusRight="@id/channelListRecycler" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/channelListRecycler"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:nextFocusLeft="@id/categoryRecycler"
+                android:visibility="gone" />
+        </LinearLayout>
     </LinearLayout>
 
     <FrameLayout
+        android:id="@+id/playerContainer"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true">
 
         <androidx.media3.ui.PlayerView
             android:id="@+id/playerView"
@@ -46,9 +66,11 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|start"
             android:layout_margin="24dp"
+            android:alpha="0"
             android:background="@drawable/bg_overlay"
             android:orientation="horizontal"
-            android:padding="12dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="12dp"
             android:visibility="gone">
 
             <ImageView
