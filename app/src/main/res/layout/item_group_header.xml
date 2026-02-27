@@ -3,22 +3,16 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="4dp"
-    android:layout_marginVertical="3dp"
-    android:background="@drawable/bg_item_selector"
+    android:layout_marginTop="6dp"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/bg_group_header_selector"
     android:focusable="true"
     android:focusableInTouchMode="true"
     android:gravity="center_vertical"
+    android:minHeight="52dp"
     android:orientation="horizontal"
-    android:paddingHorizontal="12dp"
+    android:paddingHorizontal="14dp"
     android:paddingVertical="10dp">
-
-    <TextView
-        android:id="@+id/groupArrow"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="8dp"
-        android:textColor="@color/list_text_secondary"
-        android:textSize="13sp" />
 
     <TextView
         android:id="@+id/groupName"
@@ -27,8 +21,17 @@
         android:layout_weight="1"
         android:ellipsize="end"
         android:maxLines="1"
-        android:textColor="@color/list_text_primary"
-        android:textSize="14sp"
+        android:textColor="@color/menu_group_text"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/groupArrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:textColor="@color/menu_group_arrow"
+        android:textSize="13sp"
         android:textStyle="bold" />
 
 </LinearLayout>

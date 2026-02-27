@@ -12,4 +12,34 @@
     <color name="dialog_button_tint">#6AB0FF</color>
     <color name="dialog_text_primary">#F5FFFFFF</color>
     <color name="dialog_text_secondary">#CCFFFFFF</color>
+
+    <color name="menu_group_text">#FFF6F8FF</color>
+    <color name="menu_group_arrow">#FFD2D8E4</color>
+    <color name="menu_channel_text">#FFE9EEF9</color>
+
+    <color name="menu_group_bg">#1A4C5D7A</color>
+    <color name="menu_group_bg_focused">#334E617F</color>
+    <color name="menu_group_border">#4D8FA9CC</color>
+    <color name="menu_group_border_focused">#7FAFC8F1</color>
+
+    <color name="menu_channel_bg">#142B3447</color>
+    <color name="menu_channel_bg_focused">#2D3A4B67</color>
+    <color name="menu_channel_bg_selected">#3B5878A8</color>
+    <color name="menu_channel_border">#334F6486</color>
+    <color name="menu_channel_border_focused">#6694B4E0</color>
+    <color name="menu_channel_border_selected">#FFAACBFF</color>
+
+    <color name="cctv_dialog_bg_start">#FF1F2A3A</color>
+    <color name="cctv_dialog_bg_end">#FF19202D</color>
+    <color name="cctv_dialog_border">#66A5C8F2</color>
+    <color name="cctv_dialog_title">#FFF5F9FF</color>
+    <color name="cctv_dialog_message">#D9E8F2FF</color>
+
+    <color name="cctv_dialog_button_primary_bg">#FF2C8CFF</color>
+    <color name="cctv_dialog_button_primary_bg_focused">#FF52A3FF</color>
+    <color name="cctv_dialog_button_primary_text">#FFFFFFFF</color>
+
+    <color name="cctv_dialog_button_secondary_bg">#263E5272</color>
+    <color name="cctv_dialog_button_secondary_bg_focused">#3E53749E</color>
+    <color name="cctv_dialog_button_secondary_text">#FFE7F0FF</color>
 </resources>
