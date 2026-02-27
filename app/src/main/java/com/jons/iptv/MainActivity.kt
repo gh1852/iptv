@@ -1,5 +1,6 @@
 package com.jons.iptv
 
+import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
@@ -16,7 +17,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
@@ -31,6 +35,14 @@ import java.util.LinkedHashMap
 class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
+        private const val LOAD_CONTROL_MIN_BUFFER_MS = 5_000
+        private const val LOAD_CONTROL_MAX_BUFFER_MS = 15_000
+        private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_MS = 800
+        private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_500
+        private const val TRACK_MAX_VIDEO_SIZE_SD_WIDTH = 1280
+        private const val TRACK_MAX_VIDEO_SIZE_SD_HEIGHT = 720
+        private const val SWITCH_WINDOW_MS = 20_000L
+        private const val MAX_SWITCH_COUNT_IN_WINDOW = 3
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -51,6 +63,10 @@ class MainActivity : AppCompatActivity() {
     private var playbackFailureDialog: AlertDialog? = null
     private var playbackFailureDialogAnimatedDismiss: Boolean = false
     private var isSwitchingStream: Boolean = false
+    private var retriedChannelKey: String? = null
+    private var retriedStreamIndex: Int = -1
+    private var switchWindowChannelKey: String? = null
+    private val switchTimestampsMs = ArrayDeque<Long>()
 
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
@@ -58,6 +74,7 @@ class MainActivity : AppCompatActivity() {
             val channel = currentChannel ?: return
 
             val currentUrl = channel.streamUrls.getOrNull(currentStreamIndex)
+            val channelKey = buildChannelKey(channel)
             Log.w(
                 TAG,
                 "Playback error channel=${channel.name}, index=$currentStreamIndex, url=$currentUrl, code=${error.errorCodeName}",
@@ -69,7 +86,27 @@ class MainActivity : AppCompatActivity() {
                 return
             }
 
+            if (isTransientNetworkError(error) && shouldRetryCurrentStream(channelKey, currentStreamIndex)) {
+                Log.w(
+                    TAG,
+                    "Retry current stream once channel=${channel.name}, index=$currentStreamIndex, code=${error.errorCodeName}"
+                )
+                retryCurrentStream(channel, currentStreamIndex)
+                return
+            }
+
+            if (!canSwitchInShortWindow(channelKey)) {
+                Log.w(
+                    TAG,
+                    "Skip auto-switch due to short-window limit channel=${channel.name}, switchCount=${switchTimestampsMs.size}"
+                )
+                isSwitchingStream = false
+                showPlaybackFailureDialog(channel)
+                return
+            }
+
             if (tryPlayFrom(channel, currentStreamIndex + 1)) {
+                recordAutoSwitch(channelKey)
                 if (!isSwitchingStream) {
                     isSwitchingStream = true
                     Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
@@ -81,6 +118,7 @@ class MainActivity : AppCompatActivity() {
             showPlaybackFailureDialog(channel)
         }
     }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,10 +155,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initPlayer() {
-        player = ExoPlayer.Builder(this).build().also {
-            it.addListener(playerListener)
-            binding.playerView.player = it
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                LOAD_CONTROL_MIN_BUFFER_MS,
+                LOAD_CONTROL_MAX_BUFFER_MS,
+                LOAD_CONTROL_BUFFER_FOR_PLAYBACK_MS,
+                LOAD_CONTROL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+            )
+            .build()
+
+        val trackSelector = DefaultTrackSelector(this).apply {
+            setParameters(
+                buildUponParameters()
+                    .setMaxVideoSize(
+                        TRACK_MAX_VIDEO_SIZE_SD_WIDTH,
+                        TRACK_MAX_VIDEO_SIZE_SD_HEIGHT
+                    )
+                    .setForceHighestSupportedBitrate(false)
+            )
         }
+
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setEnableDecoderFallback(true)
+
+        player = ExoPlayer.Builder(this, renderersFactory)
+            .setLoadControl(loadControl)
+            .setTrackSelector(trackSelector)
+            .build()
+            .also {
+                it.addListener(playerListener)
+                binding.playerView.player = it
+            }
     }
 
     private fun initList() {
@@ -176,6 +241,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun playChannel(channel: Channel, streamIndex: Int) {
         isSwitchingStream = false
+        resetRetryState()
+        resetSwitchWindow(channel)
         if (!tryPlayFrom(channel, streamIndex)) {
             showPlaybackFailureDialog(channel)
         }
@@ -407,11 +474,108 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun isTransientNetworkError(error: PlaybackException): Boolean {
+        return when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> true
+
+            else -> false
+        }
+    }
+
+    private fun retryCurrentStream(channel: Channel, index: Int) {
+        val streamUrl = channel.streamUrls.getOrNull(index) ?: return
+        val channelKey = buildChannelKey(channel)
+        retriedChannelKey = channelKey
+        retriedStreamIndex = index
+
+        runCatching {
+            val mediaItem = buildMediaItem(streamUrl)
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.playWhenReady = true
+        }.onFailure { throwable ->
+            Log.e(
+                TAG,
+                "Retry setup failed channel=${channel.name}, index=$index, url=$streamUrl",
+                throwable
+            )
+        }
+    }
+
+    private fun shouldRetryCurrentStream(channelKey: String, streamIndex: Int): Boolean {
+        return retriedChannelKey != channelKey || retriedStreamIndex != streamIndex
+    }
+
+    private fun canSwitchInShortWindow(channelKey: String): Boolean {
+        val now = System.currentTimeMillis()
+        if (switchWindowChannelKey != channelKey) {
+            switchWindowChannelKey = channelKey
+            switchTimestampsMs.clear()
+        }
+
+        while (switchTimestampsMs.isNotEmpty() && now - switchTimestampsMs.first() > SWITCH_WINDOW_MS) {
+            switchTimestampsMs.removeFirst()
+        }
+
+        return switchTimestampsMs.size < MAX_SWITCH_COUNT_IN_WINDOW
+    }
+
+    private fun recordAutoSwitch(channelKey: String) {
+        val now = System.currentTimeMillis()
+        if (switchWindowChannelKey != channelKey) {
+            switchWindowChannelKey = channelKey
+            switchTimestampsMs.clear()
+        }
+
+        while (switchTimestampsMs.isNotEmpty() && now - switchTimestampsMs.first() > SWITCH_WINDOW_MS) {
+            switchTimestampsMs.removeFirst()
+        }
+
+        switchTimestampsMs.addLast(now)
+        resetRetryState()
+    }
+
+    private fun resetRetryState() {
+        retriedChannelKey = null
+        retriedStreamIndex = -1
+    }
+
+    private fun resetSwitchWindow(channel: Channel) {
+        switchWindowChannelKey = buildChannelKey(channel)
+        switchTimestampsMs.clear()
+    }
+
+    private fun buildChannelKey(channel: Channel): String {
+        return "${channel.category}|${channel.name}"
+    }
+
     private fun buildMediaItem(url: String): MediaItem {
+        val inferredMimeType = inferMimeType(url)
         return MediaItem.Builder()
             .setUri(url)
-            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .apply {
+                if (inferredMimeType != null) {
+                    setMimeType(inferredMimeType)
+                }
+            }
             .build()
+    }
+
+    private fun inferMimeType(url: String): String? {
+        val parsed = Uri.parse(url)
+        val normalizedUrl = url.lowercase()
+        val path = parsed.path?.lowercase().orEmpty()
+
+        return when {
+            path.endsWith(".m3u8") || normalizedUrl.contains(".m3u8?") -> MimeTypes.APPLICATION_M3U8
+            path.endsWith(".mpd") || normalizedUrl.contains(".mpd?") -> MimeTypes.APPLICATION_MPD
+            path.endsWith(".ism") || path.endsWith(".isml") || normalizedUrl.contains("format=ism") -> MimeTypes.APPLICATION_SS
+            path.endsWith(".mp4") || normalizedUrl.contains(".mp4?") -> MimeTypes.VIDEO_MP4
+            path.endsWith(".ts") || normalizedUrl.contains(".ts?") -> MimeTypes.VIDEO_MP2T
+            else -> null
+        }
     }
 
     private fun showOverlay(channel: Channel) {
