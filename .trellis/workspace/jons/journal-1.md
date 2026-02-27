@@ -56,3 +56,45 @@
 ### Next Steps
 
 - None - task complete
+
+## Session 2: Fix startup crash and channel loading
+
+**Date**: 2026-02-27
+**Task**: Fix startup crash and channel loading
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Startup stability | Hardened autoplay flow to avoid crash when initial stream URL is invalid or playback setup throws. |
+| Playback fallback | Added safe retry path in player error callback with lifecycle guard to avoid Activity-destroyed edge cases. |
+| Data robustness | Wrapped playlist parsing failures and treated empty parsed result as explicit load failure. |
+
+**Updated Files**:
+- `app/src/main/java/com/jons/iptv/MainActivity.kt`
+- `app/src/main/java/com/jons/iptv/data/ChannelRepository.kt`
+
+**Notes**:
+- Task directory `02-26-android-startup-crash-and-channel-load-investigation` was archived.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `59fc9a5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
