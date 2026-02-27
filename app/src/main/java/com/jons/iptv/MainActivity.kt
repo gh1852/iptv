@@ -1,12 +1,17 @@
 package com.jons.iptv
 
+import android.content.Context
+import android.content.res.Configuration
 import android.app.Dialog
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
@@ -135,10 +140,18 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        enableFullscreenIfPhone()
         initPlayer()
         initList()
         initMenuInteractions()
         loadChannels()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            enableFullscreenIfPhone()
+        }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -162,6 +175,36 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun enableFullscreenIfPhone() {
+        if (isTvDevice()) return
+
+        val appWindow = window
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            appWindow.setDecorFitsSystemWindows(false)
+            appWindow.insetsController?.let { controller ->
+                controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior =
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+            return
+        }
+
+        @Suppress("DEPRECATION")
+        appWindow.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            )
+    }
+
+    private fun isTvDevice(): Boolean {
+        val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? android.app.UiModeManager
+        return uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
     }
 
     private fun initPlayer() {
