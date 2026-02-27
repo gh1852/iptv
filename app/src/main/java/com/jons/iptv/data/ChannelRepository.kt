@@ -7,7 +7,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class ChannelRepository(
-    private val playlistUrl: String = "https://live.zbds.top/tv/iptv4.m3u"
+    private val playlistUrl: String = "https://www.iyouhun.com/tv/zb"
 ) {
     suspend fun fetchChannels(): List<Channel> = withContext(Dispatchers.IO) {
         val connection = (URL(playlistUrl).openConnection() as HttpURLConnection).apply {
