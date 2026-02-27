@@ -197,19 +197,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun tryPlayFrom(channel: Channel, startIndex: Int): Boolean {
-        if (channel.streamUrls.isEmpty() || startIndex !in channel.streamUrls.indices) return false
+        if (channel.streamUrls.isEmpty() || startIndex !in channel.streamUrls.indices) {
+            Log.w(
+                TAG,
+                "Skip playback channel=${channel.name}, urlCount=${channel.streamUrls.size}, startIndex=$startIndex"
+            )
+            return false
+        }
+
+        Log.d(
+            TAG,
+            "Start playback attempt channel=${channel.name}, urlCount=${channel.streamUrls.size}, startIndex=$startIndex"
+        )
 
         for (index in startIndex until channel.streamUrls.size) {
+            val streamUrl = channel.streamUrls[index]
             val played = runCatching {
                 currentChannel = channel
                 currentStreamIndex = index
-                val mediaItem = buildMediaItem(channel.streamUrls[index])
+                val mediaItem = buildMediaItem(streamUrl)
                 player.setMediaItem(mediaItem)
                 player.prepare()
                 player.playWhenReady = true
+            }.onFailure { throwable ->
+                Log.e(
+                    TAG,
+                    "Playback setup failed channel=${channel.name}, index=$index, url=$streamUrl",
+                    throwable
+                )
             }.isSuccess
 
             if (played) {
+                Log.d(TAG, "Playback setup success channel=${channel.name}, index=$index, url=$streamUrl")
                 playbackFailureDialog?.dismiss()
                 channelAdapter.setPlayingChannel(channel)
                 showOverlay(channel)
@@ -217,8 +236,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        Log.w(TAG, "All playback setup attempts failed channel=${channel.name}, startIndex=$startIndex")
         return false
     }
+
 
     private fun updateChannelsForCategory(category: String, moveFocusToChannels: Boolean) {
         selectedCategory = category
