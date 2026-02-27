@@ -22,26 +22,13 @@
             android:textColor="@android:color/white"
             android:textStyle="bold" />
 
-        <LinearLayout
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/groupedChannelRecycler"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:orientation="horizontal">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/categoryRecycler"
-                android:layout_width="180dp"
-                android:layout_height="match_parent"
-                android:nextFocusRight="@id/channelListRecycler" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/channelListRecycler"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:nextFocusLeft="@id/categoryRecycler"
-                android:visibility="gone" />
-        </LinearLayout>
+            android:clipToPadding="false"
+            android:paddingBottom="8dp" />
     </LinearLayout>
 
     <FrameLayout

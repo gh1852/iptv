@@ -6,10 +6,10 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -19,12 +19,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import com.jons.iptv.data.CategoryChannels
 import com.jons.iptv.data.Channel
 import com.jons.iptv.data.ChannelRepository
 import com.jons.iptv.databinding.ActivityMainBinding
-import com.jons.iptv.ui.CategoryAdapter
-import com.jons.iptv.ui.ChannelAdapter
+import com.jons.iptv.ui.GroupedChannelAdapter
 import kotlinx.coroutines.launch
+import java.util.LinkedHashMap
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -35,19 +36,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
 
     private val repository = ChannelRepository()
-
-    private val categoryAdapter = CategoryAdapter { category ->
-        updateChannelsForCategory(category, moveFocusToChannels = true)
-    }
-    private val channelAdapter = ChannelAdapter { channel ->
+    private val groupedChannelAdapter = GroupedChannelAdapter { channel ->
         onChannelSelected(channel)
-        lastMenuFocusTarget = MenuFocusTarget.CHANNEL
     }
 
     private var menuVisible: Boolean = true
-    private var selectedCategory: String? = null
-    private var categoryToChannels: Map<String, List<Channel>> = emptyMap()
-    private var lastMenuFocusTarget: MenuFocusTarget = MenuFocusTarget.CATEGORY
 
     private var currentChannel: Channel? = null
     private var currentStreamIndex: Int = 0
@@ -128,21 +121,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initList() {
-        binding.categoryRecycler.layoutManager = LinearLayoutManager(this)
-        binding.categoryRecycler.adapter = categoryAdapter
-
-        binding.channelListRecycler.layoutManager = LinearLayoutManager(this)
-        binding.channelListRecycler.adapter = channelAdapter
+        binding.groupedChannelRecycler.layoutManager = LinearLayoutManager(this)
+        binding.groupedChannelRecycler.adapter = groupedChannelAdapter
     }
 
     private fun initMenuInteractions() {
-        binding.categoryRecycler.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) lastMenuFocusTarget = MenuFocusTarget.CATEGORY
-        }
-        binding.channelListRecycler.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) lastMenuFocusTarget = MenuFocusTarget.CHANNEL
-        }
-
         binding.playerContainer.setOnClickListener {
             if (menuVisible) {
                 hideMenu(moveFocusToPlayer = true)
@@ -156,32 +139,31 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             runCatching { repository.fetchChannels() }
                 .onSuccess { channels ->
-                    categoryToChannels = channels
-                        .groupBy { it.category.ifBlank { getString(R.string.category_other) } }
-                        .toSortedMap(String.CASE_INSENSITIVE_ORDER)
-                        .mapValues { (_, list) -> list.sortedBy { it.name.lowercase() } }
+                    val groupedChannels = buildGroupedChannels(channels)
+                    groupedChannelAdapter.submitGroups(groupedChannels)
 
-                    val categories = categoryToChannels.keys.toList()
-                    categoryAdapter.submitList(categories)
-
-                    val initialCategory = categories.firstOrNull()
-                    if (initialCategory != null) {
-                        updateChannelsForCategory(initialCategory, moveFocusToChannels = false)
-                    } else {
-                        selectedCategory = null
-                        channelAdapter.submitList(emptyList())
-                        binding.channelListRecycler.visibility = View.GONE
+                    val initialChannel = groupedChannels.firstOrNull()?.channels?.firstOrNull()
+                    if (initialChannel != null) {
+                        groupedChannelAdapter.setExpandedGroup(initialChannel.category)
+                        playChannel(initialChannel, 0)
                     }
 
-                    categoryToChannels[initialCategory]
-                        ?.firstOrNull()
-                        ?.let { playChannel(it, 0) }
-
-                    showMenu(MenuFocusTarget.CATEGORY)
+                    showMenu()
                 }
                 .onFailure {
                     Toast.makeText(this@MainActivity, getString(R.string.load_failed), Toast.LENGTH_LONG).show()
                 }
+        }
+    }
+
+    private fun buildGroupedChannels(channels: List<Channel>): List<CategoryChannels> {
+        val grouped = LinkedHashMap<String, MutableList<Channel>>()
+        channels.forEach { channel ->
+            val category = channel.category.ifBlank { getString(R.string.category_other) }
+            grouped.getOrPut(category) { mutableListOf() }.add(channel)
+        }
+        return grouped.map { (category, groupedChannels) ->
+            CategoryChannels(category = category, channels = groupedChannels)
         }
     }
 
@@ -230,7 +212,7 @@ class MainActivity : AppCompatActivity() {
             if (played) {
                 Log.d(TAG, "Playback setup success channel=${channel.name}, index=$index, url=$streamUrl")
                 playbackFailureDialog?.dismiss()
-                channelAdapter.setPlayingChannel(channel)
+                groupedChannelAdapter.setPlayingChannel(channel)
                 showOverlay(channel)
                 return true
             }
@@ -240,33 +222,10 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
-
-    private fun updateChannelsForCategory(category: String, moveFocusToChannels: Boolean) {
-        selectedCategory = category
-        categoryAdapter.setSelected(category)
-
-        val categoryChannels = categoryToChannels[category].orEmpty()
-        channelAdapter.submitList(categoryChannels)
-        binding.channelListRecycler.visibility = if (categoryChannels.isEmpty()) View.GONE else View.VISIBLE
-
-        if (moveFocusToChannels && categoryChannels.isNotEmpty()) {
-            lastMenuFocusTarget = MenuFocusTarget.CHANNEL
-            requestFirstItemFocus(binding.channelListRecycler)
-        } else {
-            lastMenuFocusTarget = MenuFocusTarget.CATEGORY
-        }
-    }
-
-    private fun showMenu(target: MenuFocusTarget? = null) {
+    private fun showMenu() {
         menuVisible = true
         binding.menuContainer.visibility = View.VISIBLE
-
-        val focusTarget = target ?: lastMenuFocusTarget
-        if (focusTarget == MenuFocusTarget.CHANNEL && channelAdapter.itemCount > 0 && binding.channelListRecycler.visibility == View.VISIBLE) {
-            requestFirstItemFocus(binding.channelListRecycler)
-        } else {
-            requestFirstItemFocus(binding.categoryRecycler)
-        }
+        requestFirstItemFocus(binding.groupedChannelRecycler)
     }
 
     private fun hideMenu(moveFocusToPlayer: Boolean = true) {
@@ -299,27 +258,35 @@ class MainActivity : AppCompatActivity() {
         if (playbackFailureDialog?.isShowing == true) return
 
         playbackFailureDialogAnimatedDismiss = false
-        playbackFailureDialog = AlertDialog.Builder(this)
-            .setTitle(R.string.playback_failed_title)
-            .setMessage(getString(R.string.playback_failed_message, channel.name))
-            .setCancelable(true)
-            .setPositiveButton(R.string.retry, null)
-            .setNegativeButton(R.string.close, null)
-            .show()
-            .also { dialog ->
-                val buttonColor = ContextCompat.getColor(this, R.color.dialog_button_tint)
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(buttonColor)
-                dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(buttonColor)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_playback_failure_cctv, null)
+        dialogView.findViewById<TextView>(R.id.failureTitle).text = getString(R.string.playback_failed_title)
+        dialogView.findViewById<TextView>(R.id.failureMessage).text =
+            getString(R.string.playback_failed_message, channel.name)
 
-                dialog.window?.setBackgroundDrawableResource(R.drawable.bg_overlay)
+        val retryButton = dialogView.findViewById<TextView>(R.id.buttonRetry)
+        val closeButton = dialogView.findViewById<TextView>(R.id.buttonClose)
+
+        playbackFailureDialog = AlertDialog.Builder(this, R.style.ThemeOverlay_IPTV_PlaybackFailureDialog)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+            .also { dialog ->
+                dialog.setOnDismissListener {
+                    if (playbackFailureDialog === dialog) {
+                        playbackFailureDialog = null
+                        playbackFailureDialogAnimatedDismiss = false
+                    }
+                }
+                dialog.show()
+                dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
                 playDialogEnterAnimation(dialog)
 
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                retryButton.setOnClickListener {
                     dismissPlaybackFailureDialog(dialog) {
                         playChannel(channel, 0)
                     }
                 }
-                dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnClickListener {
+                closeButton.setOnClickListener {
                     dismissPlaybackFailureDialog(dialog)
                 }
             }
@@ -395,7 +362,6 @@ class MainActivity : AppCompatActivity() {
             .build()
     }
 
-
     private fun showOverlay(channel: Channel) {
         binding.overlayName.text = channel.name
         binding.overlayLogo.load(channel.logoUrl) {
@@ -436,7 +402,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     override fun onDestroy() {
         playbackFailureDialog?.dismiss()
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
@@ -444,10 +409,5 @@ class MainActivity : AppCompatActivity() {
         player.removeListener(playerListener)
         player.release()
         super.onDestroy()
-    }
-
-    private enum class MenuFocusTarget {
-        CATEGORY,
-        CHANNEL
     }
 }

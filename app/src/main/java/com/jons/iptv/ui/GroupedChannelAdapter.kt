@@ -77,6 +77,13 @@ class GroupedChannelAdapter(
         notifyDataSetChanged()
     }
 
+    fun setExpandedGroup(category: String) {
+        expandedGroups.clear()
+        expandedGroups.add(category)
+        rebuildRows()
+        notifyDataSetChanged()
+    }
+
     private fun rebuildRows() {
         rows.clear()
         groups.forEach { group ->
