@@ -49,10 +49,57 @@ class ChannelRepository(
                 return@map channel
             }
 
-            val logoUrl = buildLogoUrl(channel.name) ?: return@map channel
+            val logoUrl = buildLogoUrls(channel.name).firstOrNull() ?: return@map channel
             channel.copy(logoUrl = logoUrl)
         }
     }
+
+    private fun buildLogoUrls(channelName: String): List<String> {
+        val rawName = channelName.trim()
+        if (rawName.isBlank()) return emptyList()
+
+        val candidates = linkedSetOf<String>()
+
+        Regex("(?i)cctv\\s*([0-9]{1,2})(\\+)?").find(rawName)?.let { match ->
+            val number = match.groupValues[1]
+            val plus = match.groupValues[2]
+            candidates.add("CCTV$number$plus")
+        }
+
+        val withoutDecorations = rawName
+            .replace(Regex("\\s+"), "")
+            .removeSuffix("高清")
+            .removeSuffix("标清")
+            .removeSuffix("超清")
+            .removeSuffix("频道")
+            .removeSuffix("台")
+            .removeSuffix("综合")
+            .removeSuffix("体育赛事")
+            .removeSuffix("体育")
+            .removeSuffix("电视剧")
+            .removeSuffix("中文国际")
+            .removeSuffix("国防军事")
+            .removeSuffix("农业农村")
+            .removeSuffix("新闻")
+            .removeSuffix("少儿")
+            .removeSuffix("音乐")
+            .removeSuffix("科教")
+            .removeSuffix("纪录")
+            .removeSuffix("电影")
+            .removeSuffix("财经")
+            .removeSuffix("综艺")
+            .removeSuffix("戏曲")
+            .removeSuffix("社会与法")
+
+        if (withoutDecorations.isNotBlank()) {
+            candidates.add(withoutDecorations)
+        }
+
+        candidates.add(rawName)
+
+        return candidates.mapNotNull { buildLogoUrl(it) }
+    }
+
 
     private fun buildLogoUrl(channelName: String): String? {
         val trimmedName = channelName.trim()
@@ -61,4 +108,5 @@ class ChannelRepository(
             .replace("+", "%20")
         return "$logoBaseUrl/$encodedName.png"
     }
+
 }
