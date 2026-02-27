@@ -11,6 +11,10 @@
     <style name="ThemeOverlay.IPTV.PlaybackFailureDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
         <item name="materialAlertDialogTitleTextStyle">@style/TextAppearance.IPTV.PlaybackDialog.Title</item>
         <item name="materialAlertDialogBodyTextStyle">@style/TextAppearance.IPTV.PlaybackDialog.Body</item>
+        <item name="buttonBarButtonStyle">@style/Widget.MaterialComponents.Button.TextButton.Dialog</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.MaterialComponents.Button.TextButton.Dialog</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.MaterialComponents.Button.TextButton.Dialog</item>
+        <item name="buttonBarNeutralButtonStyle">@style/Widget.MaterialComponents.Button.TextButton.Dialog</item>
     </style>
 
     <style name="TextAppearance.IPTV.PlaybackDialog.Title" parent="TextAppearance.MaterialComponents.Headline6">
