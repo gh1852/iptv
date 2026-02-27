@@ -41,11 +41,9 @@ class MainActivity : AppCompatActivity() {
 
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
-            val nextIndex = currentStreamIndex + 1
+            if (isFinishing || isDestroyed) return
             val channel = currentChannel ?: return
-            if (nextIndex < channel.streamUrls.size) {
-                playChannel(channel, nextIndex)
-            } else {
+            if (!tryPlayFrom(channel, currentStreamIndex + 1)) {
                 Toast.makeText(this@MainActivity, getString(R.string.no_more_streams), Toast.LENGTH_SHORT).show()
             }
         }
@@ -118,17 +116,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playChannel(channel: Channel, streamIndex: Int) {
-        if (channel.streamUrls.isEmpty()) return
+        if (!tryPlayFrom(channel, streamIndex)) {
+            Toast.makeText(this, getString(R.string.no_more_streams), Toast.LENGTH_SHORT).show()
+        }
+    }
 
-        currentChannel = channel
-        currentStreamIndex = streamIndex
-        val mediaItem = MediaItem.fromUri(channel.streamUrls[streamIndex])
-        player.setMediaItem(mediaItem)
-        player.prepare()
-        player.playWhenReady = true
+    private fun tryPlayFrom(channel: Channel, startIndex: Int): Boolean {
+        if (channel.streamUrls.isEmpty() || startIndex !in channel.streamUrls.indices) return false
 
-        channelAdapter.setPlayingChannel(channel)
-        showOverlay(channel)
+        for (index in startIndex until channel.streamUrls.size) {
+            val played = runCatching {
+                currentChannel = channel
+                currentStreamIndex = index
+                val mediaItem = MediaItem.fromUri(channel.streamUrls[index])
+                player.setMediaItem(mediaItem)
+                player.prepare()
+                player.playWhenReady = true
+            }.isSuccess
+
+            if (played) {
+                channelAdapter.setPlayingChannel(channel)
+                showOverlay(channel)
+                return true
+            }
+        }
+
+        return false
     }
 
     private fun showOverlay(channel: Channel) {

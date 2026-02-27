@@ -22,7 +22,14 @@ class ChannelRepository(
             }
 
             val body = connection.inputStream.bufferedReader().use(BufferedReader::readText)
-            M3uParser.parse(body)
+            val channels = runCatching { M3uParser.parse(body) }
+                .getOrElse { throw IllegalStateException("Failed to parse playlist", it) }
+
+            if (channels.isEmpty()) {
+                throw IllegalStateException("Parsed playlist is empty")
+            }
+
+            channels
         } finally {
             connection.disconnect()
         }
