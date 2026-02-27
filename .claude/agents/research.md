@@ -64,7 +64,7 @@ Analyze the query, determine:
 
 ### Step 2: Execute Search
 
-Execute multiple independent searches in parallel for efficiency.
+Execute multiple independent searches in parallel, with a maximum of 2 concurrent executions.
 
 ### Step 3: Organize Results
 
