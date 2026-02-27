@@ -2,26 +2,30 @@ package com.jons.iptv.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.net.HttpURLConnection
-import java.net.URL
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 class ChannelRepository(
     private val playlistUrl: String = "https://www.iyouhun.com/tv/zb"
 ) {
-    suspend fun fetchChannels(): List<Channel> = withContext(Dispatchers.IO) {
-        val connection = (URL(playlistUrl).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10000
-            readTimeout = 15000
-            requestMethod = "GET"
-        }
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
-        try {
-            if (connection.responseCode !in 200..299) {
-                throw IllegalStateException("Failed to fetch playlist: HTTP ${connection.responseCode}")
+    suspend fun fetchChannels(): List<Channel> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(playlistUrl)
+            .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("Failed to fetch playlist: HTTP ${response.code}")
             }
 
-            val body = connection.inputStream.bufferedReader().use(BufferedReader::readText)
+            val body = response.body?.string().orEmpty()
             val channels = runCatching { M3uParser.parse(body) }
                 .getOrElse { throw IllegalStateException("Failed to parse playlist", it) }
 
@@ -30,8 +34,6 @@ class ChannelRepository(
             }
 
             channels
-        } finally {
-            connection.disconnect()
         }
     }
 }
