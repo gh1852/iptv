@@ -9,6 +9,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -284,7 +285,7 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(R.string.close, null)
             .show()
             .also { dialog ->
-                val buttonColor = getColor(R.color.dialog_button_tint)
+                val buttonColor = ContextCompat.getColor(this, R.color.dialog_button_tint)
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(buttonColor)
                 dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(buttonColor)
 
