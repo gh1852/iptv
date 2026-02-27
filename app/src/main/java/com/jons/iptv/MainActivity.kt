@@ -277,7 +277,7 @@ class MainActivity : AppCompatActivity() {
         if (playbackFailureDialog?.isShowing == true) return
 
         playbackFailureDialogAnimatedDismiss = false
-        playbackFailureDialog = AlertDialog.Builder(this, R.style.ThemeOverlay_IPTV_PlaybackFailureDialog)
+        playbackFailureDialog = AlertDialog.Builder(this)
             .setTitle(R.string.playback_failed_title)
             .setMessage(getString(R.string.playback_failed_message, channel.name))
             .setCancelable(true)
