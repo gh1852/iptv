@@ -24,7 +24,6 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.jons.iptv.data.CategoryChannels
 import com.jons.iptv.data.Channel
 import com.jons.iptv.data.ChannelRepository
@@ -385,7 +384,7 @@ class MainActivity : AppCompatActivity() {
         val retryButton = dialogView.findViewById<TextView>(R.id.buttonRetry)
         val closeButton = dialogView.findViewById<TextView>(R.id.buttonClose)
 
-        playbackFailureDialog = MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_IPTV_PlaybackFailureDialog)
+        playbackFailureDialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(true)
             .create()
