@@ -254,10 +254,10 @@ class MainActivity : AppCompatActivity() {
         if (savedState != null) {
             recyclerView.post {
                 recyclerView.layoutManager?.onRestoreInstanceState(savedState)
-                if (focusPosition != null && !recyclerView.requestItemFocus(focusPosition)) {
-                    requestFirstItemFocus(recyclerView)
-                } else if (focusPosition == null) {
-                    requestFirstItemFocus(recyclerView)
+                if (focusPosition != null) {
+                    recyclerView.requestItemFocus(focusPosition)
+                } else {
+                    recyclerView.requestFocus()
                 }
             }
             pendingMenuRestoreState = null
@@ -286,7 +286,8 @@ class MainActivity : AppCompatActivity() {
         scrollToPosition(position)
         post {
             val holder = findViewHolderForAdapterPosition(position)
-            if (holder?.itemView?.requestFocus() != true) {
+            val focused = holder?.itemView?.requestFocus() == true
+            if (!focused) {
                 requestFocus()
             }
         }
@@ -300,13 +301,7 @@ class MainActivity : AppCompatActivity() {
                 recyclerView.requestFocus()
                 return@post
             }
-            recyclerView.scrollToPosition(0)
-            recyclerView.post {
-                val holder = recyclerView.findViewHolderForAdapterPosition(0)
-                if (holder?.itemView?.requestFocus() != true) {
-                    recyclerView.requestFocus()
-                }
-            }
+            recyclerView.requestItemFocus(0)
         }
     }
 
