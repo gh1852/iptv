@@ -64,6 +64,8 @@ class MainActivity : AppCompatActivity() {
     private var isSwitchingStream: Boolean = false
     private var retriedChannelKey: String? = null
     private var retriedStreamIndex: Int = -1
+    private var forcedHlsRetryChannelKey: String? = null
+    private var forcedHlsRetryStreamIndex: Int = -1
     private var switchWindowChannelKey: String? = null
     private val switchTimestampsMs = ArrayDeque<Long>()
 
@@ -91,6 +93,15 @@ class MainActivity : AppCompatActivity() {
                     "Retry current stream once channel=${channel.name}, index=$currentStreamIndex, code=${error.errorCodeName}"
                 )
                 retryCurrentStream(channel, currentStreamIndex)
+                return
+            }
+
+            if (shouldRetryAsForcedHls(error, channelKey, currentStreamIndex)) {
+                Log.w(
+                    TAG,
+                    "Retry current stream with forced HLS channel=${channel.name}, index=$currentStreamIndex"
+                )
+                retryCurrentStream(channel, currentStreamIndex, forceHls = true)
                 return
             }
 
@@ -241,6 +252,7 @@ class MainActivity : AppCompatActivity() {
     private fun playChannel(channel: Channel, streamIndex: Int) {
         isSwitchingStream = false
         resetRetryState()
+        resetForcedHlsRetryState()
         resetSwitchWindow(channel)
         if (!tryPlayFrom(channel, streamIndex)) {
             showPlaybackFailureDialog(channel)
@@ -280,6 +292,8 @@ class MainActivity : AppCompatActivity() {
 
             if (played) {
                 Log.d(TAG, "Playback setup success channel=${channel.name}, index=$index, url=$streamUrl")
+                resetRetryState()
+                resetForcedHlsRetryState()
                 playbackFailureDialog?.dismiss()
                 groupedChannelAdapter.setPlayingChannel(channel)
                 showOverlay(channel)
@@ -482,21 +496,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun retryCurrentStream(channel: Channel, index: Int) {
+    private fun retryCurrentStream(channel: Channel, index: Int, forceHls: Boolean = false) {
         val streamUrl = channel.streamUrls.getOrNull(index) ?: return
         val channelKey = buildChannelKey(channel)
         retriedChannelKey = channelKey
         retriedStreamIndex = index
+        if (forceHls) {
+            forcedHlsRetryChannelKey = channelKey
+            forcedHlsRetryStreamIndex = index
+        }
 
         runCatching {
-            val mediaItem = buildMediaItem(streamUrl)
+            val mediaItem = buildMediaItem(streamUrl, forceHls = forceHls)
             player.setMediaItem(mediaItem)
             player.prepare()
             player.playWhenReady = true
         }.onFailure { throwable ->
             Log.e(
                 TAG,
-                "Retry setup failed channel=${channel.name}, index=$index, url=$streamUrl",
+                "Retry setup failed channel=${channel.name}, index=$index, url=$streamUrl, forceHls=$forceHls",
                 throwable
             )
         }
@@ -504,6 +522,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun shouldRetryCurrentStream(channelKey: String, streamIndex: Int): Boolean {
         return retriedChannelKey != channelKey || retriedStreamIndex != streamIndex
+    }
+
+    private fun shouldRetryAsForcedHls(error: PlaybackException, channelKey: String, streamIndex: Int): Boolean {
+        if (error.errorCode != PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED) {
+            return false
+        }
+
+        return forcedHlsRetryChannelKey != channelKey || forcedHlsRetryStreamIndex != streamIndex
     }
 
     private fun canSwitchInShortWindow(channelKey: String): Boolean {
@@ -533,11 +559,17 @@ class MainActivity : AppCompatActivity() {
 
         switchTimestampsMs.addLast(now)
         resetRetryState()
+        resetForcedHlsRetryState()
     }
 
     private fun resetRetryState() {
         retriedChannelKey = null
         retriedStreamIndex = -1
+    }
+
+    private fun resetForcedHlsRetryState() {
+        forcedHlsRetryChannelKey = null
+        forcedHlsRetryStreamIndex = -1
     }
 
     private fun resetSwitchWindow(channel: Channel) {
@@ -549,8 +581,8 @@ class MainActivity : AppCompatActivity() {
         return "${channel.category}|${channel.name}"
     }
 
-    private fun buildMediaItem(url: String): MediaItem {
-        val inferredMimeType = inferMimeType(url)
+    private fun buildMediaItem(url: String, forceHls: Boolean = false): MediaItem {
+        val inferredMimeType = if (forceHls) MimeTypes.APPLICATION_M3U8 else inferMimeType(url)
         return MediaItem.Builder()
             .setUri(url)
             .apply {
