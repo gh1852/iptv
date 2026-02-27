@@ -3,6 +3,7 @@ package com.jons.iptv
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -15,8 +16,7 @@ import com.jons.iptv.data.CategoryChannels
 import com.jons.iptv.data.Channel
 import com.jons.iptv.data.ChannelRepository
 import com.jons.iptv.databinding.ActivityMainBinding
-import com.jons.iptv.ui.CategoryAdapter
-import com.jons.iptv.ui.ChannelAdapter
+import com.jons.iptv.ui.GroupedChannelAdapter
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -25,26 +25,22 @@ class MainActivity : AppCompatActivity() {
 
     private val repository = ChannelRepository()
 
-    private val categoryAdapter = CategoryAdapter { category ->
-        selectCategory(category)
-    }
-
-    private val channelAdapter = ChannelAdapter { channel ->
+    private val groupedChannelAdapter = GroupedChannelAdapter { channel ->
         onChannelSelected(channel)
     }
 
     private var groupedChannels: List<CategoryChannels> = emptyList()
-    private var selectedCategory: String? = null
     private var currentChannel: Channel? = null
     private var currentStreamIndex: Int = 0
     private var overlayHideRunnable: Runnable? = null
+    private var playbackFailureDialog: AlertDialog? = null
 
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             if (isFinishing || isDestroyed) return
             val channel = currentChannel ?: return
             if (!tryPlayFrom(channel, currentStreamIndex + 1)) {
-                Toast.makeText(this@MainActivity, getString(R.string.no_more_streams), Toast.LENGTH_SHORT).show()
+                showPlaybackFailureDialog(channel)
             }
         }
     }
@@ -55,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         initPlayer()
-        initLists()
+        initList()
         loadChannels()
     }
 
@@ -66,11 +62,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun initLists() {
-        binding.categoryRecycler.layoutManager = LinearLayoutManager(this)
+    private fun initList() {
         binding.channelRecycler.layoutManager = LinearLayoutManager(this)
-        binding.categoryRecycler.adapter = categoryAdapter
-        binding.channelRecycler.adapter = channelAdapter
+        binding.channelRecycler.adapter = groupedChannelAdapter
     }
 
     private fun loadChannels() {
@@ -87,28 +81,18 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
 
-                    val categories = groupedChannels.map { it.category }
-                    categoryAdapter.submitList(categories)
+                    groupedChannelAdapter.submitGroups(groupedChannels)
 
-                    val first = groupedChannels.firstOrNull()
-                    if (first != null) {
-                        selectedCategory = first.category
-                        categoryAdapter.setSelected(first.category)
-                        channelAdapter.submitList(first.channels)
-                        first.channels.firstOrNull()?.let { playChannel(it, 0) }
-                    }
+                    groupedChannels
+                        .firstOrNull()
+                        ?.channels
+                        ?.firstOrNull()
+                        ?.let { playChannel(it, 0) }
                 }
                 .onFailure {
                     Toast.makeText(this@MainActivity, getString(R.string.load_failed), Toast.LENGTH_LONG).show()
                 }
         }
-    }
-
-    private fun selectCategory(category: String) {
-        selectedCategory = category
-        categoryAdapter.setSelected(category)
-        val channels = groupedChannels.firstOrNull { it.category == category }?.channels.orEmpty()
-        channelAdapter.submitList(channels)
     }
 
     private fun onChannelSelected(channel: Channel) {
@@ -117,7 +101,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun playChannel(channel: Channel, streamIndex: Int) {
         if (!tryPlayFrom(channel, streamIndex)) {
-            Toast.makeText(this, getString(R.string.no_more_streams), Toast.LENGTH_SHORT).show()
+            showPlaybackFailureDialog(channel)
         }
     }
 
@@ -135,13 +119,29 @@ class MainActivity : AppCompatActivity() {
             }.isSuccess
 
             if (played) {
-                channelAdapter.setPlayingChannel(channel)
+                playbackFailureDialog?.dismiss()
+                groupedChannelAdapter.setPlayingChannel(channel)
                 showOverlay(channel)
                 return true
             }
         }
 
         return false
+    }
+
+    private fun showPlaybackFailureDialog(channel: Channel) {
+        if (isFinishing || isDestroyed) return
+        if (playbackFailureDialog?.isShowing == true) return
+
+        playbackFailureDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.playback_failed_title)
+            .setMessage(getString(R.string.playback_failed_message, channel.name))
+            .setCancelable(true)
+            .setPositiveButton(R.string.retry) { _, _ ->
+                playChannel(channel, 0)
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
     }
 
     private fun showOverlay(channel: Channel) {
@@ -162,6 +162,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        playbackFailureDialog?.dismiss()
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
         player.removeListener(playerListener)
         player.release()

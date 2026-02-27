@@ -3,38 +3,23 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
-    android:background="@android:color/black">
+    android:background="@android:color/black"
+    android:orientation="horizontal">
 
     <LinearLayout
         android:layout_width="320dp"
         android:layout_height="match_parent"
-        android:orientation="vertical"
         android:background="@color/panel_background"
+        android:orientation="vertical"
         android:padding="8dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/categories"
-            android:textStyle="bold"
+            android:padding="8dp"
+            android:text="@string/channel_groups"
             android:textColor="@android:color/white"
-            android:padding="8dp" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/categoryRecycler"
-            android:layout_width="match_parent"
-            android:layout_height="180dp"
-            android:clipToPadding="false"
-            android:paddingBottom="8dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/channels"
-            android:textStyle="bold"
-            android:textColor="@android:color/white"
-            android:padding="8dp" />
+            android:textStyle="bold" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/channelRecycler"
