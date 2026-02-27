@@ -65,13 +65,8 @@ class GroupedChannelAdapter(
         groups.clear()
         groups.addAll(newGroups)
 
-        if (expandedGroups.isEmpty()) {
-            expandedGroups.addAll(newGroups.map { it.category })
-        } else {
-            val categories = newGroups.map { it.category }.toSet()
-            expandedGroups.retainAll(categories)
-            expandedGroups.addAll(categories)
-        }
+        val categories = newGroups.map { it.category }.toSet()
+        expandedGroups.retainAll(categories)
 
         rebuildRows()
         notifyDataSetChanged()
