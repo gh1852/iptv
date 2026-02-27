@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -202,7 +203,7 @@ class MainActivity : AppCompatActivity() {
             val played = runCatching {
                 currentChannel = channel
                 currentStreamIndex = index
-                val mediaItem = MediaItem.fromUri(channel.streamUrls[index])
+                val mediaItem = buildMediaItem(channel.streamUrls[index])
                 player.setMediaItem(mediaItem)
                 player.prepare()
                 player.playWhenReady = true
@@ -347,7 +348,6 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
-
     private fun shouldAutoSwitch(error: PlaybackException): Boolean {
         return when (error.errorCode) {
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
@@ -366,6 +366,26 @@ class MainActivity : AppCompatActivity() {
             else -> false
         }
     }
+
+    private fun buildMediaItem(url: String): MediaItem {
+        val lower = url.lowercase()
+        val mimeType = when {
+            lower.contains(".m3u8") || lower.contains("format=m3u8") || lower.contains("type=hls") -> MimeTypes.APPLICATION_M3U8
+            lower.contains(".mpd") -> MimeTypes.APPLICATION_MPD
+            lower.contains(".ism") || lower.contains("manifest") && lower.contains("format=mpd") -> MimeTypes.APPLICATION_SS
+            else -> null
+        }
+
+        return if (mimeType != null) {
+            MediaItem.Builder()
+                .setUri(url)
+                .setMimeType(mimeType)
+                .build()
+        } else {
+            MediaItem.fromUri(url)
+        }
+    }
+
 
     private fun showOverlay(channel: Channel) {
         binding.overlayName.text = channel.name
