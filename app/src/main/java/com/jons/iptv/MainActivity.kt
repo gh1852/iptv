@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -49,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private var currentStreamIndex: Int = 0
     private var overlayHideRunnable: Runnable? = null
     private var playbackFailureDialog: AlertDialog? = null
+    private var playbackFailureDialogAnimatedDismiss: Boolean = false
     private var isSwitchingStream: Boolean = false
 
     private val playerListener = object : Player.Listener {
@@ -272,21 +275,77 @@ class MainActivity : AppCompatActivity() {
         if (isFinishing || isDestroyed) return
         if (playbackFailureDialog?.isShowing == true) return
 
-        playbackFailureDialog = AlertDialog.Builder(this)
+        playbackFailureDialogAnimatedDismiss = false
+        playbackFailureDialog = AlertDialog.Builder(this, R.style.ThemeOverlay_IPTV_PlaybackFailureDialog)
             .setTitle(R.string.playback_failed_title)
             .setMessage(getString(R.string.playback_failed_message, channel.name))
             .setCancelable(true)
-            .setPositiveButton(R.string.retry) { _, _ ->
-                playChannel(channel, 0)
-            }
+            .setPositiveButton(R.string.retry, null)
             .setNegativeButton(R.string.close, null)
             .show()
             .also { dialog ->
-                val buttonColor = getColor(android.R.color.holo_blue_light)
+                val buttonColor = getColor(R.color.dialog_button_tint)
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(buttonColor)
                 dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(buttonColor)
+
+                dialog.window?.setBackgroundDrawableResource(R.drawable.bg_overlay)
+                playDialogEnterAnimation(dialog)
+
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                    dismissPlaybackFailureDialog(dialog) {
+                        playChannel(channel, 0)
+                    }
+                }
+                dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnClickListener {
+                    dismissPlaybackFailureDialog(dialog)
+                }
             }
     }
+
+    private fun playDialogEnterAnimation(dialog: AlertDialog) {
+        val decorView = dialog.window?.decorView ?: return
+        val content = decorView.findViewById<View>(android.R.id.content) ?: decorView
+        content.animate().cancel()
+        content.alpha = 0f
+        content.scaleX = 0.92f
+        content.scaleY = 0.92f
+        content.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(260L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
+    private fun dismissPlaybackFailureDialog(dialog: AlertDialog, onDismissed: (() -> Unit)? = null) {
+        if (playbackFailureDialogAnimatedDismiss) return
+        val decorView = dialog.window?.decorView
+        val content = decorView?.findViewById<View>(android.R.id.content) ?: decorView
+        if (content == null) {
+            playbackFailureDialogAnimatedDismiss = true
+            dialog.dismiss()
+            onDismissed?.invoke()
+            return
+        }
+
+        playbackFailureDialogAnimatedDismiss = true
+        content.animate().cancel()
+        content.animate()
+            .alpha(0f)
+            .scaleX(0.92f)
+            .scaleY(0.92f)
+            .setDuration(220L)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .withEndAction {
+                if (dialog.isShowing) {
+                    dialog.dismiss()
+                }
+                onDismissed?.invoke()
+            }
+            .start()
+    }
+
 
     private fun shouldAutoSwitch(error: PlaybackException): Boolean {
         return when (error.errorCode) {
@@ -318,11 +377,14 @@ class MainActivity : AppCompatActivity() {
         binding.channelOverlay.animate().cancel()
         if (binding.channelOverlay.visibility != View.VISIBLE) {
             binding.channelOverlay.alpha = 0f
+            binding.channelOverlay.translationY = resources.getDimension(R.dimen.overlay_enter_start_translation)
             binding.channelOverlay.visibility = View.VISIBLE
         }
         binding.channelOverlay.animate()
             .alpha(1f)
-            .setDuration(180L)
+            .translationY(0f)
+            .setDuration(240L)
+            .setInterpolator(DecelerateInterpolator())
             .start()
 
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
@@ -331,7 +393,9 @@ class MainActivity : AppCompatActivity() {
                 binding.channelOverlay.animate().cancel()
                 binding.channelOverlay.animate()
                     .alpha(0f)
+                    .translationY(resources.getDimension(R.dimen.overlay_exit_end_translation))
                     .setDuration(220L)
+                    .setInterpolator(AccelerateDecelerateInterpolator())
                     .withEndAction {
                         binding.channelOverlay.visibility = View.GONE
                     }
@@ -341,6 +405,7 @@ class MainActivity : AppCompatActivity() {
             binding.channelOverlay.postDelayed(it, 3000)
         }
     }
+
 
     override fun onDestroy() {
         playbackFailureDialog?.dismiss()
