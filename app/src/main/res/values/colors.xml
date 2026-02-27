@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="panel_background">#BF000000</color>
+    <color name="panel_background">#B812141A</color>
+    <color name="list_text_primary">#F2FFFFFF</color>
+    <color name="list_text_secondary">#CCFFFFFF</color>
+    <color name="item_stroke_subtle">#26FFFFFF</color>
+    <color name="overlay_gradient_start">#D91A1C22</color>
+    <color name="overlay_gradient_end">#B31A1C22</color>
 </resources>
