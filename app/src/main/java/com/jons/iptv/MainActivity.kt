@@ -1,6 +1,7 @@
 package com.jons.iptv
 
 import android.os.Bundle
+import android.os.Parcelable
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -27,7 +28,6 @@ import com.jons.iptv.databinding.ActivityMainBinding
 import com.jons.iptv.ui.GroupedChannelAdapter
 import kotlinx.coroutines.launch
 import java.util.LinkedHashMap
-
 class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
@@ -42,6 +42,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var menuVisible: Boolean = true
+    private var pendingMenuRestoreState: Parcelable? = null
+    private var pendingMenuFocusPosition: Int? = null
 
     private var currentChannel: Channel? = null
     private var currentStreamIndex: Int = 0
@@ -226,15 +228,69 @@ class MainActivity : AppCompatActivity() {
     private fun showMenu() {
         menuVisible = true
         binding.menuContainer.visibility = View.VISIBLE
-        requestFirstItemFocus(binding.groupedChannelRecycler)
+        restoreMenuStateOrFocusFirst()
     }
 
     private fun hideMenu(moveFocusToPlayer: Boolean = true) {
         menuVisible = false
+        saveMenuState()
         binding.menuContainer.visibility = View.GONE
         if (moveFocusToPlayer) {
             binding.playerContainer.requestFocus()
         }
+    }
+
+    private fun saveMenuState() {
+        val recyclerView = binding.groupedChannelRecycler
+        pendingMenuRestoreState = recyclerView.layoutManager?.onSaveInstanceState()
+        pendingMenuFocusPosition = recyclerView.findFocusedItemPosition()
+    }
+
+    private fun restoreMenuStateOrFocusFirst() {
+        val recyclerView = binding.groupedChannelRecycler
+        val savedState = pendingMenuRestoreState
+        val focusPosition = pendingMenuFocusPosition
+
+        if (savedState != null) {
+            recyclerView.post {
+                recyclerView.layoutManager?.onRestoreInstanceState(savedState)
+                if (focusPosition != null && !recyclerView.requestItemFocus(focusPosition)) {
+                    requestFirstItemFocus(recyclerView)
+                } else if (focusPosition == null) {
+                    requestFirstItemFocus(recyclerView)
+                }
+            }
+            pendingMenuRestoreState = null
+            pendingMenuFocusPosition = null
+            return
+        }
+
+        if (focusPosition != null && recyclerView.requestItemFocus(focusPosition)) {
+            pendingMenuFocusPosition = null
+            return
+        }
+
+        requestFirstItemFocus(recyclerView)
+    }
+
+    private fun RecyclerView.findFocusedItemPosition(): Int? {
+        val focused = findFocus() ?: return null
+        val holder = findContainingViewHolder(focused) ?: return null
+        return holder.bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION }
+    }
+
+    private fun RecyclerView.requestItemFocus(position: Int): Boolean {
+        val itemCount = adapter?.itemCount ?: 0
+        if (position !in 0 until itemCount) return false
+
+        scrollToPosition(position)
+        post {
+            val holder = findViewHolderForAdapterPosition(position)
+            if (holder?.itemView?.requestFocus() != true) {
+                requestFocus()
+            }
+        }
+        return true
     }
 
     private fun requestFirstItemFocus(recyclerView: RecyclerView) {
