@@ -15,10 +15,11 @@
 
     <ImageView
         android:id="@+id/channelLogo"
-        android:layout_width="38dp"
-        android:layout_height="38dp"
+        android:layout_width="62dp"
+        android:layout_height="35dp"
+        android:adjustViewBounds="true"
         android:contentDescription="@string/channel_logo"
-        android:scaleType="centerCrop" />
+        android:scaleType="fitCenter" />
 
     <TextView
         android:id="@+id/channelName"

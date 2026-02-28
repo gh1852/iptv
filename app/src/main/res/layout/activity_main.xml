@@ -62,10 +62,11 @@
 
             <ImageView
                 android:id="@+id/overlayLogo"
-                android:layout_width="48dp"
+                android:layout_width="84dp"
                 android:layout_height="48dp"
+                android:adjustViewBounds="true"
                 android:contentDescription="@string/channel_logo"
-                android:scaleType="centerCrop" />
+                android:scaleType="fitCenter" />
 
             <TextView
                 android:id="@+id/overlayName"
