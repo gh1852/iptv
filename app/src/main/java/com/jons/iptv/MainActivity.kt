@@ -700,12 +700,14 @@ class MainActivity : AppCompatActivity() {
             runCatching { appUpdateRepository.fetchLatest() }
                 .onSuccess { latest ->
                     val packageInfo = packageManager.getPackageInfo(packageName, 0)
+                    val currentVersionCode = PackageInfoCompat.getLongVersionCode(packageInfo).toInt()
                     val hasNew = appUpdateRepository.hasNewVersion(
                         latestVersionCode = latest.versionCode,
-                        currentVersionCode = PackageInfoCompat.getLongVersionCode(packageInfo).toInt()
+                        currentVersionCode = currentVersionCode
                     )
-                    if (hasNew) {
-                        showUpdateDialog(latest)
+                    val forceUpdate = latest.force || currentVersionCode < latest.minSupportedVersionCode
+                    if (hasNew || forceUpdate) {
+                        showUpdateDialog(latest, forceUpdate)
                     }
                 }
                 .onFailure { throwable ->
@@ -714,28 +716,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showUpdateDialog(updateInfo: UpdateInfo) {
+    private fun showUpdateDialog(updateInfo: UpdateInfo, forceUpdate: Boolean) {
         if (isFinishing || isDestroyed) return
 
-        val message = buildString {
-            append("发现新版本：")
-            append(updateInfo.versionName)
-            if (!updateInfo.changelog.isNullOrBlank()) {
-                append("\n\n更新内容：\n")
-                append(updateInfo.changelog)
-            }
+        val message = if (!updateInfo.changelog.isNullOrBlank()) {
+            getString(
+                R.string.update_dialog_message_with_changelog,
+                updateInfo.versionName,
+                updateInfo.changelog
+            )
+        } else {
+            getString(R.string.update_dialog_message_no_changelog, updateInfo.versionName)
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("版本更新")
+        val dialogBuilder = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.update_dialog_title))
             .setMessage(message)
-            .setCancelable(true)
-            .setPositiveButton("立即更新") { _, _ ->
+            .setCancelable(!forceUpdate)
+            .setPositiveButton(getString(R.string.update_action_now)) { _, _ ->
                 downloadAndInstallUpdate(updateInfo)
             }
-            .setNegativeButton("稍后再说", null)
-            .show()
+
+        if (!forceUpdate) {
+            dialogBuilder.setNegativeButton(getString(R.string.update_action_later), null)
+        }
+
+        dialogBuilder.show()
     }
+
 
     private fun downloadAndInstallUpdate(updateInfo: UpdateInfo) {
         lifecycleScope.launch {
