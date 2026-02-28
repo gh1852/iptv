@@ -18,7 +18,6 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
@@ -76,6 +75,8 @@ class MainActivity : AppCompatActivity() {
     private var overlayHideRunnable: Runnable? = null
     private var playbackFailureDialog: Dialog? = null
     private var playbackFailureDialogAnimatedDismiss: Boolean = false
+    private var updateDialog: Dialog? = null
+    private var updateDialogAnimatedDismiss: Boolean = false
     private var isSwitchingStream: Boolean = false
     private var retriedChannelKey: String? = null
     private var retriedStreamIndex: Int = -1
@@ -718,6 +719,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showUpdateDialog(updateInfo: UpdateInfo, forceUpdate: Boolean) {
         if (isFinishing || isDestroyed) return
+        if (updateDialog?.isShowing == true) return
 
         val message = if (!updateInfo.changelog.isNullOrBlank()) {
             getString(
@@ -729,19 +731,73 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.update_dialog_message_no_changelog, updateInfo.versionName)
         }
 
-        val dialogBuilder = AlertDialog.Builder(this)
-            .setTitle(getString(R.string.update_dialog_title))
-            .setMessage(message)
-            .setCancelable(!forceUpdate)
-            .setPositiveButton(getString(R.string.update_action_now)) { _, _ ->
-                downloadAndInstallUpdate(updateInfo)
+        updateDialogAnimatedDismiss = false
+        val dialogView = layoutInflater.inflate(R.layout.dialog_playback_failure_cctv, null)
+        dialogView.findViewById<TextView>(R.id.failureTitle).text = getString(R.string.update_dialog_title)
+        dialogView.findViewById<TextView>(R.id.failureMessage).text = message
+
+        val nowButton = dialogView.findViewById<TextView>(R.id.buttonRetry)
+        val laterButton = dialogView.findViewById<TextView>(R.id.buttonClose)
+        nowButton.text = getString(R.string.update_action_now)
+        laterButton.text = getString(R.string.update_action_later)
+        laterButton.visibility = if (forceUpdate) View.GONE else View.VISIBLE
+
+        updateDialog = Dialog(this).apply {
+            setContentView(dialogView)
+            setCancelable(!forceUpdate)
+            setCanceledOnTouchOutside(!forceUpdate)
+            window?.setBackgroundDrawableResource(android.R.color.transparent)
+            setOnDismissListener {
+                if (updateDialog === this) {
+                    updateDialog = null
+                    updateDialogAnimatedDismiss = false
+                }
+            }
+            show()
+            playDialogEnterAnimation(this)
+
+            if (forceUpdate) {
+                nowButton.requestFocus()
             }
 
-        if (!forceUpdate) {
-            dialogBuilder.setNegativeButton(getString(R.string.update_action_later), null)
+            nowButton.setOnClickListener {
+                dismissUpdateDialog(this) {
+                    downloadAndInstallUpdate(updateInfo)
+                }
+            }
+            laterButton.setOnClickListener {
+                dismissUpdateDialog(this)
+            }
+        }
+    }
+
+
+    private fun dismissUpdateDialog(dialog: Dialog, onDismissed: (() -> Unit)? = null) {
+        if (updateDialogAnimatedDismiss) return
+        val decorView = dialog.window?.decorView
+        val content = decorView?.findViewById<View>(android.R.id.content) ?: decorView
+        if (content == null) {
+            updateDialogAnimatedDismiss = true
+            dialog.dismiss()
+            onDismissed?.invoke()
+            return
         }
 
-        dialogBuilder.show()
+        updateDialogAnimatedDismiss = true
+        content.animate().cancel()
+        content.animate()
+            .alpha(0f)
+            .scaleX(0.92f)
+            .scaleY(0.92f)
+            .setDuration(220L)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .withEndAction {
+                if (dialog.isShowing) {
+                    dialog.dismiss()
+                }
+                onDismissed?.invoke()
+            }
+            .start()
     }
 
 
@@ -868,6 +924,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         playbackFailureDialog?.dismiss()
+        updateDialog?.dismiss()
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
         binding.channelOverlay.animate().cancel()
         player.removeListener(playerListener)
