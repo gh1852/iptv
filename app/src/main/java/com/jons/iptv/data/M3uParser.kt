@@ -57,7 +57,7 @@ object M3uParser {
             }
         }
 
-        return merged.values
+        val parsedChannels = merged.values
             .filter { it.streamUrls.isNotEmpty() }
             .map {
                 Channel(
@@ -68,6 +68,13 @@ object M3uParser {
                         .sortedByDescending(::streamPriority)
                 )
             }
+
+        val firstCategory = parsedChannels.firstOrNull()?.category
+        return if (firstCategory != null) {
+            parsedChannels.filter { it.category != firstCategory }
+        } else {
+            parsedChannels
+        }
     }
 
     private fun appendChannel(
