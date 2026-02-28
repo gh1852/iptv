@@ -84,6 +84,30 @@ class GroupedChannelAdapter(
         notifyDataSetChanged()
     }
 
+    fun getAdjacentChannels(current: Channel?): Pair<Channel?, Channel?> {
+        val allChannels = groups.flatMap { it.channels }
+        if (allChannels.isEmpty() || current == null) {
+            return null to null
+        }
+
+        val exactIndex = allChannels.indexOfFirst {
+            it.category == current.category && it.name == current.name
+        }
+        val currentIndex = if (exactIndex >= 0) {
+            exactIndex
+        } else {
+            allChannels.indexOfFirst { it.name == current.name }
+        }
+        if (currentIndex < 0) {
+            return null to null
+        }
+
+        val size = allChannels.size
+        val previous = allChannels[(currentIndex - 1 + size) % size]
+        val next = allChannels[(currentIndex + 1) % size]
+        return previous to next
+    }
+
     private fun rebuildRows() {
         rows.clear()
         groups.forEach { group ->

@@ -71,6 +71,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingMenuFocusPosition: Int? = null
 
     private var currentChannel: Channel? = null
+    private var previousChannel: Channel? = null
+    private var nextChannel: Channel? = null
     private var currentStreamIndex: Int = 0
     private var overlayHideRunnable: Runnable? = null
     private var playbackFailureDialog: Dialog? = null
@@ -187,6 +189,16 @@ class MainActivity : AppCompatActivity() {
                             Toast.LENGTH_SHORT
                         ).show()
                     }
+                    return true
+                }
+
+                KeyEvent.KEYCODE_CHANNEL_UP -> {
+                    nextChannel?.let { playChannel(it, 0) }
+                    return true
+                }
+
+                KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                    previousChannel?.let { playChannel(it, 0) }
                     return true
                 }
 
@@ -345,6 +357,12 @@ class MainActivity : AppCompatActivity() {
         hideMenu(moveFocusToPlayer = true)
     }
 
+    private fun refreshAdjacentChannels() {
+        val (previous, next) = groupedChannelAdapter.getAdjacentChannels(currentChannel)
+        previousChannel = previous
+        nextChannel = next
+    }
+
     private fun playChannel(channel: Channel, streamIndex: Int) {
         isSwitchingStream = false
         resetRetryState()
@@ -392,6 +410,7 @@ class MainActivity : AppCompatActivity() {
                 resetForcedHlsRetryState()
                 playbackFailureDialog?.dismiss()
                 groupedChannelAdapter.setPlayingChannel(channel)
+                refreshAdjacentChannels()
                 showOverlay(channel)
                 return true
             }
