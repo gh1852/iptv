@@ -57,6 +57,42 @@ jobs:
             exit 1
           fi
 
+      - name: Validate versionCode increment
+        shell: bash
+        run: |
+          CURRENT_VERSION_CODE='${{ steps.version.outputs.version_code }}'
+          LATEST_JSON_URL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/latest.json"
+
+          PREV_VERSION_CODE=$(python3 - "$LATEST_JSON_URL" <<'PY'
+import json
+import urllib.request
+import urllib.error
+import sys
+
+url = sys.argv[1]
+try:
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        print(int(data.get("versionCode", 0)))
+except urllib.error.HTTPError as e:
+    if e.code == 404:
+        print(0)
+    else:
+        raise
+except Exception:
+    print(0)
+PY
+)
+
+          PREV_VERSION_CODE=${PREV_VERSION_CODE:-0}
+
+          if [[ "$PREV_VERSION_CODE" -gt 0 && "$CURRENT_VERSION_CODE" -le "$PREV_VERSION_CODE" ]]; then
+            echo "Current versionCode ($CURRENT_VERSION_CODE) must be greater than previous release versionCode ($PREV_VERSION_CODE)."
+            exit 1
+          fi
+
+          echo "versionCode check passed: current=$CURRENT_VERSION_CODE, previous=$PREV_VERSION_CODE"
+
       - name: Build release APK
         run: ./gradlew :app:assembleRelease --stacktrace
 
@@ -79,20 +115,68 @@ jobs:
           cp "$SIGNED_APK" "$APK_NAME"
 
           SHA256=$(sha256sum "$APK_NAME" | cut -d ' ' -f 1)
+          RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ steps.version.outputs.tag_name }}"
+          CHANGELOG=$(git log --no-merges -n 10 --pretty=format:'- %s')
+          if [[ -z "$CHANGELOG" ]]; then
+            CHANGELOG="See GitHub release notes"
+          fi
 
-          cat > latest.json <<EOF
-          {
-            "versionCode": ${{ steps.version.outputs.version_code }},
-            "versionName": "${{ steps.version.outputs.version_name }}",
-            "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.version.outputs.tag_name }}/${APK_NAME}",
-            "sha256": "${SHA256}",
-            "changelog": "See GitHub release notes",
-            "force": false,
-            "minSupportedVersionCode": 1
-          }
-          EOF
+          VERSION_CODE='${{ steps.version.outputs.version_code }}'
+          VERSION_NAME='${{ steps.version.outputs.version_name }}'
+          TAG_NAME='${{ steps.version.outputs.tag_name }}'
+          export VERSION_CODE VERSION_NAME TAG_NAME APK_NAME SHA256 CHANGELOG RELEASE_NOTES_URL GITHUB_REPOSITORY
+
+          python3 - <<'PY'
+import json
+import os
+
+payload = {
+    "versionCode": int(os.environ["VERSION_CODE"]),
+    "versionName": os.environ["VERSION_NAME"],
+    "apkUrl": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['TAG_NAME']}/{os.environ['APK_NAME']}",
+    "sha256": os.environ["SHA256"],
+    "changelog": os.environ["CHANGELOG"],
+    "releaseNotesUrl": os.environ["RELEASE_NOTES_URL"],
+    "force": False,
+    "minSupportedVersionCode": 1,
+}
+
+with open("latest.json", "w", encoding="utf-8") as f:
+    json.dump(payload, f, ensure_ascii=False, indent=2)
+PY
 
           echo "apk_name=${APK_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate latest metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+import json
+import re
+from pathlib import Path
+
+path = Path("latest.json")
+if not path.exists():
+    raise SystemExit("latest.json not found")
+
+obj = json.loads(path.read_text(encoding="utf-8"))
+
+required_non_empty = ["versionName", "apkUrl", "sha256", "changelog"]
+for key in required_non_empty:
+    value = obj.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise SystemExit(f"Invalid or empty field: {key}")
+
+version_code = obj.get("versionCode")
+if not isinstance(version_code, int) or version_code <= 0:
+    raise SystemExit("versionCode must be a positive integer")
+
+sha256 = obj["sha256"].strip().lower()
+if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+    raise SystemExit("sha256 must be a 64-char hex string")
+
+print("latest.json validation passed")
+PY
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
