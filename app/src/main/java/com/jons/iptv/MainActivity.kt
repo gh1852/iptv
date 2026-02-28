@@ -21,6 +21,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -698,9 +699,10 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             runCatching { appUpdateRepository.fetchLatest() }
                 .onSuccess { latest ->
+                    val packageInfo = packageManager.getPackageInfo(packageName, 0)
                     val hasNew = appUpdateRepository.hasNewVersion(
                         latestVersionCode = latest.versionCode,
-                        currentVersionCode = BuildConfig.VERSION_CODE
+                        currentVersionCode = PackageInfoCompat.getLongVersionCode(packageInfo).toInt()
                     )
                     if (hasNew) {
                         showUpdateDialog(latest)
