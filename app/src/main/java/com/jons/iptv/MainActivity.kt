@@ -55,6 +55,7 @@ class MainActivity : AppCompatActivity() {
         private const val SWITCH_WINDOW_MS = 20_000L
         private const val MAX_SWITCH_COUNT_IN_WINDOW = 3
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
+        private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -331,9 +332,15 @@ class MainActivity : AppCompatActivity() {
                     if (initialChannel != null) {
                         groupedChannelAdapter.setExpandedGroup(initialChannel.category)
                         playChannel(initialChannel, 0)
+                        showMenu()
+                        binding.menuContainer.postDelayed({
+                            if (menuVisible && !isFinishing && !isDestroyed) {
+                                hideMenu(moveFocusToPlayer = true)
+                            }
+                        }, STARTUP_MENU_AUTO_HIDE_DELAY_MS)
+                    } else {
+                        showMenu()
                     }
-
-                    showMenu()
                 }
                 .onFailure {
                     Toast.makeText(this@MainActivity, getString(R.string.load_failed), Toast.LENGTH_LONG).show()
