@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
         private const val TRACK_MAX_VIDEO_SIZE_SD_HEIGHT = 720
         private const val SWITCH_WINDOW_MS = 20_000L
         private const val MAX_SWITCH_COUNT_IN_WINDOW = 3
+        private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -73,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     private var forcedHlsRetryStreamIndex: Int = -1
     private var switchWindowChannelKey: String? = null
     private val switchTimestampsMs = ArrayDeque<Long>()
+    private var lastBackPressedAtMs: Long = 0L
 
     private val playerListener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
@@ -162,6 +164,19 @@ class MainActivity : AppCompatActivity() {
                         hideMenu(moveFocusToPlayer = true)
                         return true
                     }
+
+                    val now = System.currentTimeMillis()
+                    if (now - lastBackPressedAtMs <= BACK_PRESS_EXIT_WINDOW_MS) {
+                        finish()
+                    } else {
+                        lastBackPressedAtMs = now
+                        Toast.makeText(
+                            this,
+                            getString(R.string.press_back_again_to_exit),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    return true
                 }
 
                 KeyEvent.KEYCODE_DPAD_CENTER,
@@ -708,6 +723,11 @@ class MainActivity : AppCompatActivity() {
         }.also {
             binding.channelOverlay.postDelayed(it, 3000)
         }
+    }
+
+    override fun onPause() {
+        lastBackPressedAtMs = 0L
+        super.onPause()
     }
 
     override fun onDestroy() {

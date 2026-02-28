@@ -14,4 +14,5 @@
     <string name="retry">重试</string>
     <string name="close">关闭</string>
     <string name="switching_stream">当前线路不可用，正在切换下一条线路</string>
+    <string name="press_back_again_to_exit">再按一次返回键退出</string>
 </resources>
