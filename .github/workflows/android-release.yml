@@ -27,6 +27,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android Build Tools 29.0.3
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "build-tools;29.0.3"
+
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
