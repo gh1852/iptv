@@ -18,9 +18,14 @@ class AppUpdateRepository(
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
+    private fun withGhFastProxy(url: String): String {
+        val normalized = url.trim()
+        return if (normalized.startsWith(GH_FAST_PREFIX)) normalized else "$GH_FAST_PREFIX$normalized"
+    }
+
     suspend fun fetchLatest(): UpdateInfo = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url(metadataUrl)
+            .url(withGhFastProxy(metadataUrl))
             .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
             .get()
             .build()
@@ -36,7 +41,7 @@ class AppUpdateRepository(
             UpdateInfo(
                 versionCode = json.getInt("versionCode"),
                 versionName = json.getString("versionName"),
-                apkUrl = json.getString("apkUrl"),
+                apkUrl = withGhFastProxy(json.getString("apkUrl")),
                 sha256 = json.optString("sha256", ""),
                 changelog = json.optString("changelog", ""),
                 force = json.optBoolean("force", false),
@@ -100,5 +105,9 @@ class AppUpdateRepository(
 
     fun hasNewVersion(latestVersionCode: Int, currentVersionCode: Int): Boolean {
         return latestVersionCode > currentVersionCode
+    }
+
+    private companion object {
+        const val GH_FAST_PREFIX = "https://ghfast.top/"
     }
 }
