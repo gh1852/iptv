@@ -167,14 +167,44 @@ class MainActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                    if (!menuVisible) {
-                        showMenu()
-                        return true
-                    }
+                    return handleMenuConfirmKey()
                 }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun handleMenuConfirmKey(): Boolean {
+        if (!menuVisible) {
+            showMenu()
+            return true
+        }
+
+        val focusedView = currentFocus
+        if (focusedView != null && isDescendantOf(focusedView, binding.menuContainer)) {
+            return false
+        }
+
+        hideMenu(moveFocusToPlayer = true)
+        return true
+    }
+
+    private fun toggleMenuVisibility(moveFocusToPlayerWhenHide: Boolean) {
+        if (menuVisible) {
+            hideMenu(moveFocusToPlayer = moveFocusToPlayerWhenHide)
+        } else {
+            showMenu()
+        }
+    }
+
+    private fun isDescendantOf(view: View, parent: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current === parent) return true
+            val next = current.parent
+            current = if (next is View) next else null
+        }
+        return false
     }
 
     private fun enableFullscreenIfPhone() {
@@ -248,11 +278,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initMenuInteractions() {
         binding.playerContainer.setOnClickListener {
-            if (menuVisible) {
-                hideMenu(moveFocusToPlayer = true)
-            } else {
-                showMenu()
-            }
+            toggleMenuVisibility(moveFocusToPlayerWhenHide = true)
         }
     }
 
@@ -290,6 +316,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun onChannelSelected(channel: Channel) {
         playChannel(channel, 0)
+        hideMenu(moveFocusToPlayer = true)
     }
 
     private fun playChannel(channel: Channel, streamIndex: Int) {
@@ -371,25 +398,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun restoreMenuStateOrFocusFirst() {
         val recyclerView = binding.groupedChannelRecycler
-        val savedState = pendingMenuRestoreState
-        val focusPosition = pendingMenuFocusPosition
-
-        if (savedState != null) {
-            recyclerView.post {
-                recyclerView.layoutManager?.onRestoreInstanceState(savedState)
-                if (focusPosition != null) {
-                    recyclerView.requestItemFocus(focusPosition)
-                } else {
-                    recyclerView.requestFocus()
-                }
-            }
+        pendingMenuRestoreState?.let { savedState ->
+            recyclerView.layoutManager?.onRestoreInstanceState(savedState)
             pendingMenuRestoreState = null
-            pendingMenuFocusPosition = null
-            return
         }
 
+        val focusPosition = pendingMenuFocusPosition
+        pendingMenuFocusPosition = null
+
         if (focusPosition != null && recyclerView.requestItemFocus(focusPosition)) {
-            pendingMenuFocusPosition = null
             return
         }
 
@@ -407,10 +424,14 @@ class MainActivity : AppCompatActivity() {
         if (position !in 0 until itemCount) return false
 
         scrollToPosition(position)
+        val holder = findViewHolderForAdapterPosition(position)
+        if (holder?.itemView?.requestFocus() == true) {
+            return true
+        }
+
         post {
-            val holder = findViewHolderForAdapterPosition(position)
-            val focused = holder?.itemView?.requestFocus() == true
-            if (!focused) {
+            val postedHolder = findViewHolderForAdapterPosition(position)
+            if (postedHolder?.itemView?.requestFocus() != true) {
                 requestFocus()
             }
         }
@@ -418,14 +439,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestFirstItemFocus(recyclerView: RecyclerView) {
-        recyclerView.post {
-            val itemCount = recyclerView.adapter?.itemCount ?: 0
-            if (itemCount == 0) {
-                recyclerView.requestFocus()
-                return@post
-            }
-            recyclerView.requestItemFocus(0)
+        val itemCount = recyclerView.adapter?.itemCount ?: 0
+        if (itemCount == 0) {
+            recyclerView.requestFocus()
+            return
         }
+        recyclerView.requestItemFocus(0)
     }
 
     private fun showPlaybackFailureDialog(channel: Channel) {
