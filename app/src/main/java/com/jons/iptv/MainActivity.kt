@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -780,6 +781,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             show()
+            window?.setLayout(
+                resources.getDimensionPixelSize(R.dimen.update_dialog_fixed_width),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
             playDialogEnterAnimation(this)
 
             if (forceUpdate) {

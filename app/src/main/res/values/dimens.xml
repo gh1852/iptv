@@ -2,4 +2,5 @@
 <resources>
     <dimen name="overlay_enter_start_translation">16dp</dimen>
     <dimen name="overlay_exit_end_translation">8dp</dimen>
+    <dimen name="update_dialog_fixed_width">420dp</dimen>
 </resources>
