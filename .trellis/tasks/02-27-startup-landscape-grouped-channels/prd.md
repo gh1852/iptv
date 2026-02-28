@@ -10,11 +10,11 @@ Align the IPTV app navigation and playback failure UX with the requested TV-focu
 - When all stream sources for a channel fail, show a friendly dialog with Retry and Close actions.
 
 ## Acceptance Criteria
-- [ ] On app startup, UI is landscape without manual rotation.
-- [ ] Left-side navigation no longer shows an outer categories wrapper.
-- [ ] Grouped channels are directly visible/expandable in one list region.
-- [ ] If all stream URLs fail for a selected channel, a dialog appears with Retry and Close buttons.
-- [ ] Retry attempts playback again for the current channel.
+- [x] On app startup, UI is landscape without manual rotation.
+- [x] Left-side navigation no longer shows an outer categories wrapper.
+- [x] Grouped channels are directly visible/expandable in one list region.
+- [x] If all stream URLs fail for a selected channel, a dialog appears with Retry and Close buttons.
+- [x] Retry attempts playback again for the current channel.
 
 ## Technical Notes
 - Existing category/channel split is implemented via two RecyclerViews in MainActivity and activity_main.xml.
