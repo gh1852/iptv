@@ -1,12 +1,14 @@
 package com.jons.iptv
 
-import android.content.Context
-import android.content.res.Configuration
 import android.app.Dialog
+import android.content.Context
+import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
+import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
@@ -16,7 +18,9 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -29,12 +33,15 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import com.jons.iptv.data.AppUpdateRepository
 import com.jons.iptv.data.CategoryChannels
 import com.jons.iptv.data.Channel
 import com.jons.iptv.data.ChannelRepository
+import com.jons.iptv.data.UpdateInfo
 import com.jons.iptv.databinding.ActivityMainBinding
 import com.jons.iptv.ui.GroupedChannelAdapter
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.LinkedHashMap
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -54,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
 
     private val repository = ChannelRepository()
+    private val appUpdateRepository = AppUpdateRepository()
     private val groupedChannelAdapter = GroupedChannelAdapter { channel ->
         onChannelSelected(channel)
     }
@@ -147,6 +155,7 @@ class MainActivity : AppCompatActivity() {
         initList()
         initMenuInteractions()
         loadChannels()
+        checkUpdateSilently()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -682,6 +691,123 @@ class MainActivity : AppCompatActivity() {
             path.endsWith(".mp4") || normalizedUrl.contains(".mp4?") -> MimeTypes.VIDEO_MP4
             path.endsWith(".ts") || normalizedUrl.contains(".ts?") -> MimeTypes.VIDEO_MP2T
             else -> null
+        }
+    }
+
+    private fun checkUpdateSilently() {
+        lifecycleScope.launch {
+            runCatching { appUpdateRepository.fetchLatest() }
+                .onSuccess { latest ->
+                    val hasNew = appUpdateRepository.hasNewVersion(
+                        latestVersionCode = latest.versionCode,
+                        currentVersionCode = BuildConfig.VERSION_CODE
+                    )
+                    if (hasNew) {
+                        showUpdateDialog(latest)
+                    }
+                }
+                .onFailure { throwable ->
+                    Log.w(TAG, "Update check failed", throwable)
+                }
+        }
+    }
+
+    private fun showUpdateDialog(updateInfo: UpdateInfo) {
+        if (isFinishing || isDestroyed) return
+
+        val message = buildString {
+            append("发现新版本：")
+            append(updateInfo.versionName)
+            if (!updateInfo.changelog.isNullOrBlank()) {
+                append("\n\n更新内容：\n")
+                append(updateInfo.changelog)
+            }
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("版本更新")
+            .setMessage(message)
+            .setCancelable(true)
+            .setPositiveButton("立即更新") { _, _ ->
+                downloadAndInstallUpdate(updateInfo)
+            }
+            .setNegativeButton("稍后再说", null)
+            .show()
+    }
+
+    private fun downloadAndInstallUpdate(updateInfo: UpdateInfo) {
+        lifecycleScope.launch {
+            Toast.makeText(this@MainActivity, getString(R.string.update_downloading), Toast.LENGTH_SHORT).show()
+
+            val updateDir = File(cacheDir, "updates")
+            val targetFile = File(updateDir, "iptv-update-${updateInfo.versionCode}.apk")
+
+            runCatching {
+                val downloaded = appUpdateRepository.downloadApk(updateInfo.apkUrl, targetFile)
+                appUpdateRepository.verifySha256(downloaded, updateInfo.sha256)
+                downloaded
+            }.onSuccess { apkFile ->
+                if (!canRequestPackageInstallsCompat()) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.update_install_permission_required),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    openUnknownSourcesSettings()
+                    return@onSuccess
+                }
+                installDownloadedApk(apkFile)
+            }.onFailure { throwable ->
+                Log.w(TAG, "Update install flow failed", throwable)
+                val messageRes = if (throwable.message?.contains("SHA256", ignoreCase = true) == true) {
+                    R.string.update_verification_failed
+                } else {
+                    R.string.update_download_failed
+                }
+                Toast.makeText(this@MainActivity, getString(messageRes), Toast.LENGTH_LONG).show()
+                openUpdateUrl(updateInfo.apkUrl)
+            }
+        }
+    }
+
+    private fun canRequestPackageInstallsCompat(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
+    }
+
+    private fun openUnknownSourcesSettings() {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            }
+        }.onFailure {
+            Toast.makeText(this, getString(R.string.update_install_start_failed), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun installDownloadedApk(file: File) {
+        runCatching {
+            val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        }.onFailure {
+            Log.w(TAG, "Failed to launch installer", it)
+            Toast.makeText(this, getString(R.string.update_install_start_failed), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openUpdateUrl(url: String) {
+        runCatching {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
+        }.onFailure {
+            Toast.makeText(this, getString(R.string.update_open_url_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
