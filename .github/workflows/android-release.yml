@@ -127,23 +127,23 @@ jobs:
           export VERSION_CODE VERSION_NAME TAG_NAME APK_NAME SHA256 CHANGELOG RELEASE_NOTES_URL GITHUB_REPOSITORY
 
           python3 - <<'PY'
-import json
-import os
+          import json
+          import os
 
-payload = {
-    "versionCode": int(os.environ["VERSION_CODE"]),
-    "versionName": os.environ["VERSION_NAME"],
-    "apkUrl": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['TAG_NAME']}/{os.environ['APK_NAME']}",
-    "sha256": os.environ["SHA256"],
-    "changelog": os.environ["CHANGELOG"],
-    "releaseNotesUrl": os.environ["RELEASE_NOTES_URL"],
-    "force": False,
-    "minSupportedVersionCode": 1,
-}
+          payload = {
+              "versionCode": int(os.environ["VERSION_CODE"]),
+              "versionName": os.environ["VERSION_NAME"],
+              "apkUrl": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{os.environ['TAG_NAME']}/{os.environ['APK_NAME']}",
+              "sha256": os.environ["SHA256"],
+              "changelog": os.environ["CHANGELOG"],
+              "releaseNotesUrl": os.environ["RELEASE_NOTES_URL"],
+              "force": False,
+              "minSupportedVersionCode": 1,
+          }
 
-with open("latest.json", "w", encoding="utf-8") as f:
-    json.dump(payload, f, ensure_ascii=False, indent=2)
-PY
+          with open("latest.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, ensure_ascii=False, indent=2)
+          PY
 
           echo "apk_name=${APK_NAME}" >> "$GITHUB_OUTPUT"
 
@@ -151,32 +151,32 @@ PY
         shell: bash
         run: |
           python3 - <<'PY'
-import json
-import re
-from pathlib import Path
+          import json
+          import re
+          from pathlib import Path
 
-path = Path("latest.json")
-if not path.exists():
-    raise SystemExit("latest.json not found")
+          path = Path("latest.json")
+          if not path.exists():
+              raise SystemExit("latest.json not found")
 
-obj = json.loads(path.read_text(encoding="utf-8"))
+          obj = json.loads(path.read_text(encoding="utf-8"))
 
-required_non_empty = ["versionName", "apkUrl", "sha256", "changelog"]
-for key in required_non_empty:
-    value = obj.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise SystemExit(f"Invalid or empty field: {key}")
+          required_non_empty = ["versionName", "apkUrl", "sha256", "changelog"]
+          for key in required_non_empty:
+              value = obj.get(key)
+              if not isinstance(value, str) or not value.strip():
+                  raise SystemExit(f"Invalid or empty field: {key}")
 
-version_code = obj.get("versionCode")
-if not isinstance(version_code, int) or version_code <= 0:
-    raise SystemExit("versionCode must be a positive integer")
+          version_code = obj.get("versionCode")
+          if not isinstance(version_code, int) or version_code <= 0:
+              raise SystemExit("versionCode must be a positive integer")
 
-sha256 = obj["sha256"].strip().lower()
-if not re.fullmatch(r"[0-9a-f]{64}", sha256):
-    raise SystemExit("sha256 must be a 64-char hex string")
+          sha256 = obj["sha256"].strip().lower()
+          if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+              raise SystemExit("sha256 must be a 64-char hex string")
 
-print("latest.json validation passed")
-PY
+          print("latest.json validation passed")
+          PY
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
