@@ -27,11 +27,28 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
+      - name: Extract app version from Gradle
+        id: version
+        shell: bash
+        run: |
+          VERSION_OUTPUT=$(./gradlew -q :app:printVersionInfo)
+          VERSION_CODE=$(printf '%s\n' "$VERSION_OUTPUT" | awk -F= '/^VERSION_CODE=/{print $2}')
+          VERSION_NAME=$(printf '%s\n' "$VERSION_OUTPUT" | awk -F= '/^VERSION_NAME=/{print $2}')
+
+          if [[ -z "$VERSION_CODE" || -z "$VERSION_NAME" ]]; then
+            echo "Failed to read versionCode/versionName from Gradle output"
+            echo "$VERSION_OUTPUT"
+            exit 1
+          fi
+
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: app-debug-apk-v${{ steps.version.outputs.version_name }}
           path: app/build/outputs/apk/debug/*.apk

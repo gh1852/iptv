@@ -41,6 +41,13 @@ android {
     }
 }
 
+tasks.register("printVersionInfo") {
+    doLast {
+        println("VERSION_CODE=${android.defaultConfig.versionCode}")
+        println("VERSION_NAME=${android.defaultConfig.versionName}")
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
