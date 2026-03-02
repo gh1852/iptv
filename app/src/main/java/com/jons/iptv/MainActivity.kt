@@ -23,10 +23,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -57,10 +61,12 @@ class MainActivity : AppCompatActivity() {
         private const val MAX_SWITCH_COUNT_IN_WINDOW = 3
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
+        private const val AUDIO_TRACK_RESELECT_DELAY_MS = 650L
     }
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var player: ExoPlayer
+    private lateinit var trackSelector: DefaultTrackSelector
 
     private val repository = ChannelRepository()
     private val appUpdateRepository = AppUpdateRepository()
@@ -90,8 +96,24 @@ class MainActivity : AppCompatActivity() {
     private var switchWindowChannelKey: String? = null
     private val switchTimestampsMs = ArrayDeque<Long>()
     private var lastBackPressedAtMs: Long = 0L
+    private var audioTrackReselectDoneForPlayback: Boolean = false
+    private var audioTrackReselectRunnable: Runnable? = null
 
     private val playerListener = object : Player.Listener {
+        override fun onTracksChanged(tracks: Tracks) {
+            if (audioTrackReselectDoneForPlayback) return
+            if (!player.playWhenReady) return
+            if (player.playbackState != Player.STATE_READY) return
+            if (tracks.groups.none { it.type == C.TRACK_TYPE_AUDIO && it.length > 1 }) return
+
+            audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
+            audioTrackReselectRunnable = Runnable {
+                applyAudioTrackFallbackIfNeeded()
+            }.also {
+                binding.playerView.postDelayed(it, AUDIO_TRACK_RESELECT_DELAY_MS)
+            }
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             if (isFinishing || isDestroyed) return
             val channel = currentChannel ?: return
@@ -314,7 +336,7 @@ class MainActivity : AppCompatActivity() {
             )
             .build()
 
-        val trackSelector = DefaultTrackSelector(this).apply {
+        trackSelector = DefaultTrackSelector(this).apply {
             setParameters(
                 buildUponParameters()
                     .setMaxVideoSize(
@@ -333,10 +355,19 @@ class MainActivity : AppCompatActivity() {
             .setTrackSelector(trackSelector)
             .build()
             .also {
+                it.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                        .build(),
+                    true
+                )
+                it.setHandleAudioBecomingNoisy(true)
                 it.addListener(playerListener)
                 binding.playerView.player = it
             }
     }
+
 
     private fun initList() {
         binding.groupedChannelRecycler.layoutManager = LinearLayoutManager(this)
@@ -427,6 +458,7 @@ class MainActivity : AppCompatActivity() {
             val played = runCatching {
                 currentChannel = channel
                 currentStreamIndex = index
+                resetAudioTrackReselectState()
                 val mediaItem = buildMediaItem(streamUrl)
                 player.setMediaItem(mediaItem)
                 player.prepare()
@@ -686,6 +718,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         runCatching {
+            resetAudioTrackReselectState()
             val mediaItem = buildMediaItem(streamUrl, forceHls = forceHls)
             player.setMediaItem(mediaItem)
             player.prepare()
@@ -785,6 +818,69 @@ class MainActivity : AppCompatActivity() {
             path.endsWith(".ts") || normalizedUrl.contains(".ts?") -> MimeTypes.VIDEO_MP2T
             else -> null
         }
+    }
+
+    private fun applyAudioTrackFallbackIfNeeded() {
+        if (audioTrackReselectDoneForPlayback) return
+
+        val currentTracks = player.currentTracks
+        val audioGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        if (audioGroups.isEmpty()) {
+            audioTrackReselectDoneForPlayback = true
+            Log.w(TAG, "No audio track group found after ready state")
+            return
+        }
+
+        val selectedAudioGroup = audioGroups.firstOrNull { group ->
+            (0 until group.length).any { index -> group.isTrackSelected(index) }
+        }
+
+        val candidate = audioGroups.firstNotNullOfOrNull { group ->
+            val selectedIndex = (0 until group.length).firstOrNull { idx -> group.isTrackSelected(idx) }
+            val fallbackIndex = (0 until group.length).firstOrNull { idx ->
+                !group.isTrackSelected(idx) && group.isTrackSupported(idx)
+            } ?: return@firstNotNullOfOrNull null
+
+            if (selectedAudioGroup != null && selectedAudioGroup.mediaTrackGroup == group.mediaTrackGroup && selectedIndex != null) {
+                val selectedFormat = group.getTrackFormat(selectedIndex)
+                val fallbackFormat = group.getTrackFormat(fallbackIndex)
+                Log.w(
+                    TAG,
+                    "Audio fallback switch channel=${currentChannel?.name}, index=$currentStreamIndex, selectedCodec=${selectedFormat.sampleMimeType}, fallbackCodec=${fallbackFormat.sampleMimeType}"
+                )
+            }
+
+            group to fallbackIndex
+        }
+
+        if (candidate == null) {
+            audioTrackReselectDoneForPlayback = true
+            Log.d(TAG, "No supported alternative audio track found")
+            return
+        }
+
+        val (group, trackIndex) = candidate
+        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
+        trackSelector.setParameters(
+            trackSelector
+                .buildUponParameters()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .setOverrideForType(override)
+        )
+
+        audioTrackReselectDoneForPlayback = true
+        player.seekTo(player.currentPosition)
+    }
+
+    private fun resetAudioTrackReselectState() {
+        audioTrackReselectDoneForPlayback = false
+        audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
+        audioTrackReselectRunnable = null
+        trackSelector.setParameters(
+            trackSelector
+                .buildUponParameters()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+        )
     }
 
     private fun checkUpdateSilently() {
@@ -1020,6 +1116,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         playbackFailureDialog?.dismiss()
         updateDialog?.dismiss()
+        audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
+        audioTrackReselectRunnable = null
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
         binding.channelOverlay.animate().cancel()
         player.removeListener(playerListener)
