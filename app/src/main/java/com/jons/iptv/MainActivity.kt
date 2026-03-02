@@ -236,11 +236,23 @@ class MainActivity : AppCompatActivity() {
 
         val focusedView = currentFocus
         if (focusedView != null && isDescendantOf(focusedView, binding.menuContainer)) {
-            return false
+            return triggerMenuFocusedClick(focusedView)
         }
 
         hideMenu(moveFocusToPlayer = true)
         return true
+    }
+
+    private fun triggerMenuFocusedClick(focusedView: View): Boolean {
+        var current: View? = focusedView
+        while (current != null && current !== binding.menuContainer) {
+            if (current.isClickable && current.performClick()) {
+                return true
+            }
+            val parent = current.parent
+            current = if (parent is View) parent else null
+        }
+        return false
     }
 
     private fun toggleMenuVisibility(moveFocusToPlayerWhenHide: Boolean) {
