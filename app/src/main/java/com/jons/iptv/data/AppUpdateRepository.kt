@@ -108,6 +108,6 @@ class AppUpdateRepository(
     }
 
     private companion object {
-        const val GH_FAST_PREFIX = "https://wget.la/"
+        const val GH_FAST_PREFIX = "https://edgeone.gh-proxy.org/"
     }
 }
