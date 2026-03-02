@@ -71,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     private var menuVisible: Boolean = true
     private var pendingMenuRestoreState: Parcelable? = null
     private var pendingMenuFocusPosition: Int? = null
+    private var pendingMenuFocusChannel: Channel? = null
 
     private var currentChannel: Channel? = null
     private var previousChannel: Channel? = null
@@ -473,6 +474,7 @@ class MainActivity : AppCompatActivity() {
         val recyclerView = binding.groupedChannelRecycler
         pendingMenuRestoreState = recyclerView.layoutManager?.onSaveInstanceState()
         pendingMenuFocusPosition = recyclerView.findFocusedItemPosition()
+        pendingMenuFocusChannel = pendingMenuFocusPosition?.let { groupedChannelAdapter.getChannelAtPosition(it) }
     }
 
     private fun restoreMenuStateOrFocusFirst() {
@@ -482,15 +484,37 @@ class MainActivity : AppCompatActivity() {
             pendingMenuRestoreState = null
         }
 
+        currentChannel?.let { channel ->
+            var playingPosition = groupedChannelAdapter.findPositionByChannel(channel)
+            if (playingPosition == null) {
+                groupedChannelAdapter.setExpandedGroup(channel.category)
+                playingPosition = groupedChannelAdapter.findPositionByChannel(channel)
+            }
+            if (playingPosition != null && recyclerView.requestItemFocus(playingPosition)) {
+                pendingMenuFocusPosition = null
+                pendingMenuFocusChannel = null
+                return
+            }
+        }
+
         val focusPosition = pendingMenuFocusPosition
         pendingMenuFocusPosition = null
 
         if (focusPosition != null && recyclerView.requestItemFocus(focusPosition)) {
+            pendingMenuFocusChannel = null
+            return
+        }
+
+        val focusChannel = pendingMenuFocusChannel
+        pendingMenuFocusChannel = null
+        val fallbackPosition = focusChannel?.let { groupedChannelAdapter.findPositionByChannel(it) }
+        if (fallbackPosition != null && recyclerView.requestItemFocus(fallbackPosition)) {
             return
         }
 
         requestFirstItemFocus(recyclerView)
     }
+
 
     private fun RecyclerView.findFocusedItemPosition(): Int? {
         val focused = findFocus() ?: return null
@@ -505,16 +529,30 @@ class MainActivity : AppCompatActivity() {
         scrollToPosition(position)
         val holder = findViewHolderForAdapterPosition(position)
         if (holder?.itemView?.requestFocus() == true) {
+            centerItemIfPossible(holder.itemView)
             return true
         }
 
         post {
             val postedHolder = findViewHolderForAdapterPosition(position)
-            if (postedHolder?.itemView?.requestFocus() != true) {
+            if (postedHolder?.itemView?.requestFocus() == true) {
+                centerItemIfPossible(postedHolder.itemView)
+            } else {
                 requestFocus()
             }
         }
         return true
+    }
+
+    private fun RecyclerView.centerItemIfPossible(itemView: View) {
+        post {
+            if (!isAttachedToWindow) return@post
+            val targetTop = (height - itemView.height) / 2
+            val dy = itemView.top - targetTop
+            if (dy != 0) {
+                scrollBy(0, dy)
+            }
+        }
     }
 
     private fun requestFirstItemFocus(recyclerView: RecyclerView) {

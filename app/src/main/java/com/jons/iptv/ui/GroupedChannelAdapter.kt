@@ -31,6 +31,27 @@ class GroupedChannelAdapter(
     private val rows = mutableListOf<RowItem>()
     private var playingChannelName: String? = null
 
+    fun getChannelAtPosition(position: Int): Channel? {
+        val row = rows.getOrNull(position) as? RowItem.ChannelRow ?: return null
+        return row.channel
+    }
+
+    fun findPositionByChannel(channel: Channel): Int? {
+        val exactIndex = rows.indexOfFirst { row ->
+            val channelRow = row as? RowItem.ChannelRow ?: return@indexOfFirst false
+            channelRow.channel.category == channel.category && channelRow.channel.name == channel.name
+        }
+        if (exactIndex >= 0) {
+            return exactIndex
+        }
+
+        val byNameIndex = rows.indexOfFirst { row ->
+            val channelRow = row as? RowItem.ChannelRow ?: return@indexOfFirst false
+            channelRow.channel.name == channel.name
+        }
+        return byNameIndex.takeIf { it >= 0 }
+    }
+
     override fun getItemViewType(position: Int): Int {
         return when (rows[position]) {
             is RowItem.GroupHeader -> VIEW_TYPE_GROUP_HEADER
