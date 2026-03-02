@@ -204,6 +204,20 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
 
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    if (!menuVisible) {
+                        previousChannel?.let { playChannel(it, 0) }
+                        return true
+                    }
+                }
+
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (!menuVisible) {
+                        nextChannel?.let { playChannel(it, 0) }
+                        return true
+                    }
+                }
+
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER -> {
