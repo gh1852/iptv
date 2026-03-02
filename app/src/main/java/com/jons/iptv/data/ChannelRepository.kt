@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class ChannelRepository(
     private val playlistUrl: String = "https://ghfast.top/https://raw.githubusercontent.com/gh1852/iptv-api/refs/heads/master/output/result.txt",
-    private val logoBaseUrl: String = "https://wget.la/https://raw.githubusercontent.com/CCSH/IPTV/main/logo"
+    private val logoBaseUrl: String = "https://ghfast.top/https://raw.githubusercontent.com/CCSH/IPTV/main/logo"
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
