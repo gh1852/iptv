@@ -45,7 +45,8 @@ class ChannelRepository(
         if (logoBaseUrl.isBlank()) return channels
 
         return channels.map { channel ->
-            if (!channel.logoUrl.isNullOrBlank()) {
+            val currentLogoUrl = channel.logoUrl
+            if (currentLogoUrl != null && currentLogoUrl.isNotBlank()) {
                 return@map channel
             }
 
