@@ -5,7 +5,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 class ChannelRepository(
@@ -105,7 +104,7 @@ class ChannelRepository(
     private fun buildLogoUrl(channelName: String): String? {
         val trimmedName = channelName.trim()
         if (trimmedName.isBlank()) return null
-        val encodedName = URLEncoder.encode(trimmedName, StandardCharsets.UTF_8.toString())
+        val encodedName = URLEncoder.encode(trimmedName, "UTF-8")
             .replace("+", "%20")
         return "$logoBaseUrl/$encodedName.png"
     }
