@@ -177,6 +177,9 @@ class GroupedChannelAdapter(
             val channel = item.channel
             binding.channelName.text = channel.name
             binding.channelLogo.load(channel.logoUrl) {
+                memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                networkCachePolicy(coil.request.CachePolicy.ENABLED)
                 placeholder(R.drawable.ic_channel_placeholder)
                 error(R.drawable.ic_channel_placeholder)
             }

@@ -178,7 +178,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
+        repository.preloadChannels()
         enableFullscreenIfPhone()
         initPlayer()
         initList()
@@ -382,7 +382,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadChannels() {
         lifecycleScope.launch {
-            runCatching { repository.fetchChannels() }
+            runCatching { repository.getChannels() }
                 .onSuccess { channels ->
                     val groupedChannels = buildGroupedChannels(channels)
                     groupedChannelAdapter.submitGroups(groupedChannels)
@@ -1071,6 +1071,9 @@ class MainActivity : AppCompatActivity() {
     private fun showOverlay(channel: Channel) {
         binding.overlayName.text = channel.name
         binding.overlayLogo.load(channel.logoUrl) {
+            memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+            diskCachePolicy(coil.request.CachePolicy.ENABLED)
+            networkCachePolicy(coil.request.CachePolicy.ENABLED)
             crossfade(true)
             placeholder(R.drawable.ic_channel_placeholder)
             error(R.drawable.ic_channel_placeholder)

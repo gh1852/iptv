@@ -1,6 +1,10 @@
 package com.jons.iptv.data
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,6 +19,51 @@ class ChannelRepository(
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
+
+    fun preloadChannels() {
+        synchronized(preloadLock) {
+            if (preloadDeferred?.isActive == true || cachedChannels != null) {
+                return
+            }
+            preloadDeferred = preloadScope.async {
+                runCatching { fetchChannels() }
+            }
+        }
+    }
+
+    suspend fun getChannels(): List<Channel> {
+        val cached = cachedChannels
+        if (!cached.isNullOrEmpty()) {
+            return cached
+        }
+
+        val deferred = synchronized(preloadLock) { preloadDeferred }
+        if (deferred != null) {
+            val preloaded = deferred.await()
+                .onSuccess { channels ->
+                    if (channels.isNotEmpty()) {
+                        cachedChannels = channels
+                    }
+                }
+                .getOrNull()
+
+            synchronized(preloadLock) {
+                if (preloadDeferred === deferred) {
+                    preloadDeferred = null
+                }
+            }
+
+            if (!preloaded.isNullOrEmpty()) {
+                return preloaded
+            }
+        }
+
+        return fetchChannels().also { channels ->
+            if (channels.isNotEmpty()) {
+                cachedChannels = channels
+            }
+        }
+    }
 
     suspend fun fetchChannels(): List<Channel> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
@@ -109,4 +158,14 @@ class ChannelRepository(
         return "$logoBaseUrl/$encodedName.png"
     }
 
+    companion object {
+        private val preloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val preloadLock = Any()
+
+        @Volatile
+        private var preloadDeferred: Deferred<Result<List<Channel>>>? = null
+
+        @Volatile
+        private var cachedChannels: List<Channel>? = null
+    }
 }
