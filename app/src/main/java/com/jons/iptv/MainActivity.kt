@@ -59,7 +59,6 @@ class MainActivity : AppCompatActivity() {
         private const val TRACK_MAX_VIDEO_SIZE_SD_WIDTH = 1280
         private const val TRACK_MAX_VIDEO_SIZE_SD_HEIGHT = 720
         private const val SWITCH_WINDOW_MS = 20_000L
-        private const val MAX_SWITCH_COUNT_IN_WINDOW = 3
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
         private const val AUDIO_TRACK_RESELECT_DELAY_MS = 650L
@@ -209,7 +208,7 @@ class MainActivity : AppCompatActivity() {
                 return
             }
 
-            if (!canSwitchInShortWindow(channelKey)) {
+            if (!canSwitchInShortWindow(channel)) {
                 Log.w(
                     TAG,
                     "Skip auto-switch due to short-window limit channel=${channel.name}, switchCount=${switchTimestampsMs.size}"
@@ -832,7 +831,12 @@ class MainActivity : AppCompatActivity() {
         return result
     }
 
-    private fun canSwitchInShortWindow(channelKey: String): Boolean {
+    private fun canSwitchInShortWindow(channel: Channel): Boolean {
+        if (channel.streamUrls.size <= 2) {
+            return true
+        }
+
+        val channelKey = buildChannelKey(channel)
         val now = System.currentTimeMillis()
         if (switchWindowChannelKey != channelKey) {
             switchWindowChannelKey = channelKey
@@ -843,10 +847,10 @@ class MainActivity : AppCompatActivity() {
             switchTimestampsMs.removeFirst()
         }
 
-        val result = switchTimestampsMs.size < MAX_SWITCH_COUNT_IN_WINDOW
+        val result = switchTimestampsMs.size < channel.streamUrls.size - 1
         Log.d(
             TAG,
-            "Short-window switch decision channelKey=$channelKey, switchCount=${switchTimestampsMs.size}, result=$result"
+            "Short-window switch decision channelKey=$channelKey, switchCount=${switchTimestampsMs.size}, maxAllowed=${channel.streamUrls.size - 1}, result=$result"
         )
         return result
     }
