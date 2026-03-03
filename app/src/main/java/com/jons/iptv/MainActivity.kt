@@ -118,6 +118,7 @@ class MainActivity : AppCompatActivity() {
     private var playbackStallWindowStartMs: Long = 0L
     private var playbackStallStartPositionMs: Long = 0L
     private var playbackStallCheckRunnable: Runnable? = null
+    private var decoderRecoveryRequired: Boolean = false
 
     private val playerListener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
@@ -645,7 +646,26 @@ class MainActivity : AppCompatActivity() {
         nextChannel = next
     }
 
+    private fun ensureHealthyPlayerIfNeeded(reason: String) {
+        if (!decoderRecoveryRequired) {
+            return
+        }
+
+        Log.w(TAG, "Recreate player for decoder recovery reason=$reason")
+        runCatching {
+            stopPlaybackStallMonitor("decoder_recreate_$reason")
+            player.removeListener(playerListener)
+            player.release()
+            initPlayer()
+            decoderRecoveryRequired = false
+        }.onFailure { throwable ->
+            Log.e(TAG, "Player recreation failed reason=$reason", throwable)
+            decoderRecoveryRequired = false
+        }
+    }
+
     private fun playChannel(channel: Channel, streamIndex: Int) {
+        ensureHealthyPlayerIfNeeded("play_channel")
         Log.d(
             TAG,
             "Play channel request channel=${channel.name}, category=${channel.category}, streamIndex=$streamIndex, streamCount=${channel.streamUrls.size}"
@@ -927,35 +947,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun recoverFromDecoderFailure(channel: Channel) {
-        val nextIndex = currentStreamIndex + 1
-        val hasNext = nextIndex < channel.streamUrls.size
+        decoderRecoveryRequired = true
+        stopPlaybackStallMonitor("decoder_recover")
 
-        runCatching {
-            player.removeListener(playerListener)
-            player.release()
-            initPlayer()
-            if (hasNext) {
-                resetRetryState()
-                resetForcedHlsRetryState()
-                resetUnsupportedAudioSwitchState()
-                stopPlaybackStallMonitor("decoder_recover")
-                if (tryPlayFrom(channel, nextIndex)) {
-                    recordAutoSwitch(buildChannelKey(channel))
-                    isSwitchingStream = true
-                    Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
-                    return
-                }
-            }
-        }.onFailure { throwable ->
-            Log.e(
+        val nextIndex = currentStreamIndex + 1
+        if (nextIndex >= channel.streamUrls.size) {
+            Log.w(
                 TAG,
-                "Decoder recovery failed channel=${channel.name}, index=$currentStreamIndex",
-                throwable
+                "Decoder failure on last source. Show failure dialog channel=${channel.name}, index=$currentStreamIndex"
             )
+            isSwitchingStream = false
+            showPlaybackFailureDialog(channel)
+            return
         }
 
-        isSwitchingStream = false
-        showPlaybackFailureDialog(channel)
+        if (!canSwitchInShortWindow(channel)) {
+            Log.w(
+                TAG,
+                "Decoder failure detected but short-window limit reached channel=${channel.name}, index=$currentStreamIndex"
+            )
+            isSwitchingStream = false
+            showPlaybackFailureDialog(channel)
+            return
+        }
+
+        Log.w(
+            TAG,
+            "Decoder failure recovery: recreate player and switch next source channel=${channel.name}, from=$currentStreamIndex, to=$nextIndex"
+        )
+        recordAutoSwitch(buildChannelKey(channel))
+        isSwitchingStream = true
+        Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
+        playChannel(channel, nextIndex)
     }
 
     private fun isTransientNetworkError(error: PlaybackException): Boolean {
