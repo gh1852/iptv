@@ -12,6 +12,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -88,6 +89,28 @@ class PlayerEngineCoordinator(
                 decoderRecoveryRequired = true
             }
             playbackController.onPlayerError(error)
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+            if (audioGroups.isEmpty()) {
+                Log.w(logTag, "Audio track info: no audio groups, channel=${currentChannel?.name}, index=$currentStreamIndex")
+                return
+            }
+
+            audioGroups.forEachIndexed { groupIndex, group ->
+                group.mediaTrackGroup.length.let { trackCount ->
+                    for (trackIndex in 0 until trackCount) {
+                        val format = group.mediaTrackGroup.getFormat(trackIndex)
+                        val selected = group.isTrackSelected(trackIndex)
+                        val supported = group.isTrackSupported(trackIndex)
+                        Log.i(
+                            logTag,
+                            "Audio track info: channel=${currentChannel?.name}, index=$currentStreamIndex, group=$groupIndex, track=$trackIndex, selected=$selected, supported=$supported, mime=${format.sampleMimeType}, codecs=${format.codecs}, language=${format.language}, channels=${format.channelCount}, sampleRate=${format.sampleRate}, label=${format.label}"
+                        )
+                    }
+                }
+            }
         }
     }
 
