@@ -20,6 +20,30 @@ class ChannelRepository(
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    private fun buildProxyCandidates(url: String): List<String> {
+        val normalized = url.trim()
+        if (normalized.isBlank()) return emptyList()
+
+        val raw = stripKnownProxyPrefix(normalized)
+        val candidates = linkedSetOf<String>()
+
+        if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+            candidates.add(normalized)
+        }
+
+        PROXY_PREFIXES.forEach { prefix ->
+            candidates.add("$prefix$raw")
+        }
+        candidates.add(raw)
+        return candidates.toList()
+    }
+
+    private fun stripKnownProxyPrefix(url: String): String {
+        return PROXY_PREFIXES.firstOrNull { prefix -> url.startsWith(prefix) }
+            ?.let { prefix -> url.removePrefix(prefix) }
+            ?: url
+    }
+
     fun preloadChannels() {
         synchronized(preloadLock) {
             if (preloadDeferred?.isActive == true || cachedChannels != null) {
@@ -66,27 +90,38 @@ class ChannelRepository(
     }
 
     suspend fun fetchChannels(): List<Channel> = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(playlistUrl)
-            .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
-            .get()
-            .build()
+        var lastError: Throwable? = null
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Failed to fetch playlist: HTTP ${response.code}")
+        for (candidateUrl in buildProxyCandidates(playlistUrl)) {
+            val request = Request.Builder()
+                .url(candidateUrl)
+                .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
+                .get()
+                .build()
+
+            val result = runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("Failed to fetch playlist: HTTP ${response.code}")
+                    }
+
+                    val body = response.body?.string().orEmpty()
+                    val channels = runCatching { M3uParser.parse(body) }
+                        .getOrElse { throw IllegalStateException("Failed to parse playlist", it) }
+
+                    if (channels.isEmpty()) {
+                        throw IllegalStateException("Parsed playlist is empty")
+                    }
+
+                    enrichMissingLogos(channels)
+                }
             }
 
-            val body = response.body?.string().orEmpty()
-            val channels = runCatching { M3uParser.parse(body) }
-                .getOrElse { throw IllegalStateException("Failed to parse playlist", it) }
-
-            if (channels.isEmpty()) {
-                throw IllegalStateException("Parsed playlist is empty")
-            }
-
-            enrichMissingLogos(channels)
+            result.onSuccess { return@withContext it }
+                .onFailure { lastError = it }
         }
+
+        throw IllegalStateException("Failed to fetch playlist from all proxy candidates", lastError)
     }
 
     private fun enrichMissingLogos(channels: List<Channel>): List<Channel> {
@@ -159,6 +194,10 @@ class ChannelRepository(
     }
 
     companion object {
+        private val PROXY_PREFIXES = listOf(
+            "https://ghfast.top/",
+            "https://edgeone.gh-proxy.org/"
+        )
         private val preloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val preloadLock = Any()
 

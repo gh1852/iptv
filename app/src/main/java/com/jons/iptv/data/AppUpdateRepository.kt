@@ -18,36 +18,66 @@ class AppUpdateRepository(
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    private fun withGhFastProxy(url: String): String {
+    private fun buildProxyCandidates(url: String): List<String> {
         val normalized = url.trim()
-        return if (normalized.startsWith(GH_FAST_PREFIX)) normalized else "$GH_FAST_PREFIX$normalized"
+        if (normalized.isBlank()) return emptyList()
+
+        val raw = stripKnownProxyPrefix(normalized)
+        val candidates = linkedSetOf<String>()
+
+        if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+            candidates.add(normalized)
+        }
+
+        PROXY_PREFIXES.forEach { prefix ->
+            candidates.add("$prefix$raw")
+        }
+        candidates.add(raw)
+        return candidates.toList()
+    }
+
+    private fun stripKnownProxyPrefix(url: String): String {
+        return PROXY_PREFIXES.firstOrNull { prefix -> url.startsWith(prefix) }
+            ?.let { prefix -> url.removePrefix(prefix) }
+            ?: url
     }
 
     suspend fun fetchLatest(): UpdateInfo = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(withGhFastProxy(metadataUrl))
-            .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
-            .get()
-            .build()
+        var lastError: Throwable? = null
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Failed to fetch update metadata: HTTP ${response.code}")
+        for (candidateUrl in buildProxyCandidates(metadataUrl)) {
+            val request = Request.Builder()
+                .url(candidateUrl)
+                .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
+                .get()
+                .build()
+
+            val result = runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("Failed to fetch update metadata: HTTP ${response.code}")
+                    }
+
+                    val body = response.body?.string().orEmpty()
+                    val json = JSONObject(body)
+
+                    UpdateInfo(
+                        versionCode = json.getInt("versionCode"),
+                        versionName = json.getString("versionName"),
+                        apkUrl = json.getString("apkUrl"),
+                        sha256 = json.optString("sha256", ""),
+                        changelog = json.optString("changelog", ""),
+                        force = json.optBoolean("force", false),
+                        minSupportedVersionCode = json.optInt("minSupportedVersionCode", 1)
+                    )
+                }
             }
 
-            val body = response.body?.string().orEmpty()
-            val json = JSONObject(body)
-
-            UpdateInfo(
-                versionCode = json.getInt("versionCode"),
-                versionName = json.getString("versionName"),
-                apkUrl = withGhFastProxy(json.getString("apkUrl")),
-                sha256 = json.optString("sha256", ""),
-                changelog = json.optString("changelog", ""),
-                force = json.optBoolean("force", false),
-                minSupportedVersionCode = json.optInt("minSupportedVersionCode", 1)
-            )
+            result.onSuccess { return@withContext it }
+                .onFailure { lastError = it }
         }
+
+        throw IllegalStateException("Failed to fetch update metadata from all proxy candidates", lastError)
     }
 
     suspend fun downloadApk(apkUrl: String, targetFile: File): File = withContext(Dispatchers.IO) {
@@ -56,26 +86,38 @@ class AppUpdateRepository(
             targetFile.delete()
         }
 
-        val request = Request.Builder()
-            .url(apkUrl)
-            .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
-            .get()
-            .build()
+        var lastError: Throwable? = null
+        for (candidateUrl in buildProxyCandidates(apkUrl)) {
+            val request = Request.Builder()
+                .url(candidateUrl)
+                .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
+                .get()
+                .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Failed to download APK: HTTP ${response.code}")
-            }
+            val result = runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("Failed to download APK: HTTP ${response.code}")
+                    }
 
-            val body = response.body ?: throw IllegalStateException("Empty APK response body")
-            body.byteStream().use { input ->
-                FileOutputStream(targetFile).use { output ->
-                    input.copyTo(output)
+                    val body = response.body ?: throw IllegalStateException("Empty APK response body")
+                    body.byteStream().use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
                 }
+                targetFile
             }
+
+            result.onSuccess { return@withContext it }
+                .onFailure {
+                    targetFile.delete()
+                    lastError = it
+                }
         }
 
-        targetFile
+        throw IllegalStateException("Failed to download APK from all proxy candidates", lastError)
     }
 
     suspend fun verifySha256(file: File, expectedSha256: String): Boolean = withContext(Dispatchers.IO) {
@@ -108,6 +150,9 @@ class AppUpdateRepository(
     }
 
     private companion object {
-        const val GH_FAST_PREFIX = "https://edgeone.gh-proxy.org/"
+        val PROXY_PREFIXES = listOf(
+            "https://edgeone.gh-proxy.org/",
+            "https://ghfast.top/"
+        )
     }
 }
