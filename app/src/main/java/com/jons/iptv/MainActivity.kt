@@ -32,9 +32,12 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -59,6 +62,8 @@ class MainActivity : AppCompatActivity() {
         private const val TRACK_MAX_VIDEO_SIZE_SD_WIDTH = 1280
         private const val TRACK_MAX_VIDEO_SIZE_SD_HEIGHT = 720
         private const val SWITCH_WINDOW_MS = 20_000L
+        private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
+        private const val HTTP_READ_TIMEOUT_MS = 8_000
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
         private const val AUDIO_TRACK_RESELECT_DELAY_MS = 650L
@@ -409,9 +414,20 @@ class MainActivity : AppCompatActivity() {
         val renderersFactory = DefaultRenderersFactory(this)
             .setEnableDecoderFallback(true)
 
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(HTTP_CONNECT_TIMEOUT_MS)
+            .setReadTimeoutMs(HTTP_READ_TIMEOUT_MS)
+            .setKeepPostFor302Redirects(true)
+            .setUserAgent("Mozilla/5.0 (Android) IPTV/1.0")
+
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+            .setLiveTargetOffsetMs(3_000)
+
         player = ExoPlayer.Builder(this, renderersFactory)
             .setLoadControl(loadControl)
             .setTrackSelector(trackSelector)
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .also {
                 it.setAudioAttributes(
