@@ -52,6 +52,7 @@ import com.jons.iptv.data.ChannelRepository
 import com.jons.iptv.data.UpdateInfo
 import com.jons.iptv.databinding.ActivityMainBinding
 import com.jons.iptv.ui.GroupedChannelAdapter
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.LinkedHashMap
@@ -73,6 +74,8 @@ class MainActivity : AppCompatActivity() {
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
         private const val AUDIO_TRACK_RESELECT_DELAY_MS = 650L
+        private const val PLAYBACK_STALL_DETECT_WINDOW_MS = 1_500L
+        private const val PLAYBACK_STALL_POSITION_DELTA_MS = 120L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -111,6 +114,8 @@ class MainActivity : AppCompatActivity() {
     private var lastBackPressedAtMs: Long = 0L
     private var audioTrackReselectDoneForPlayback: Boolean = false
     private var audioTrackReselectRunnable: Runnable? = null
+    private var playbackStallWindowStartMs: Long = 0L
+    private var playbackStallStartPositionMs: Long = 0L
 
     private val playerListener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
@@ -175,6 +180,13 @@ class MainActivity : AppCompatActivity() {
                 TAG,
                 "Playback state changed state=$playbackState, playWhenReady=${player.playWhenReady}, isPlaying=${player.isPlaying}, channel=${currentChannel?.name}, index=$currentStreamIndex, position=${player.currentPosition}"
             )
+
+            when (playbackState) {
+                Player.STATE_BUFFERING,
+                Player.STATE_READY -> maybeHandlePlaybackStall()
+                Player.STATE_IDLE,
+                Player.STATE_ENDED -> resetPlaybackStallWindow("state=$playbackState")
+            }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -241,6 +253,70 @@ class MainActivity : AppCompatActivity() {
             isSwitchingStream = false
             showPlaybackFailureDialog(channel)
         }
+    }
+
+    private fun maybeHandlePlaybackStall() {
+        val channel = currentChannel ?: return
+        if (isSwitchingStream || !player.playWhenReady) {
+            resetPlaybackStallWindow("switching_or_paused")
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val position = player.currentPosition
+        if (playbackStallWindowStartMs == 0L) {
+            playbackStallWindowStartMs = now
+            playbackStallStartPositionMs = position
+            return
+        }
+
+        val elapsed = now - playbackStallWindowStartMs
+        val positionDelta = abs(position - playbackStallStartPositionMs)
+        if (elapsed < PLAYBACK_STALL_DETECT_WINDOW_MS) {
+            return
+        }
+
+        if (positionDelta > PLAYBACK_STALL_POSITION_DELTA_MS) {
+            resetPlaybackStallWindow("position_advanced")
+            return
+        }
+
+        if (!canSwitchInShortWindow(channel)) {
+            Log.w(
+                TAG,
+                "Playback stall detected but short-window limit reached channel=${channel.name}, index=$currentStreamIndex"
+            )
+            resetPlaybackStallWindow("switch_limit")
+            return
+        }
+
+        val nextIndex = currentStreamIndex + 1
+        Log.w(
+            TAG,
+            "Playback stall detected. Try next source channel=${channel.name}, index=$currentStreamIndex, elapsed=${elapsed}ms, positionDelta=${positionDelta}ms"
+        )
+        if (tryPlayFrom(channel, nextIndex)) {
+            recordAutoSwitch(buildChannelKey(channel))
+            isSwitchingStream = true
+            Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
+            resetPlaybackStallWindow("switched")
+            return
+        }
+
+        isSwitchingStream = false
+        showPlaybackFailureDialog(channel)
+        resetPlaybackStallWindow("switch_failed")
+    }
+
+    private fun resetPlaybackStallWindow(reason: String) {
+        if (playbackStallWindowStartMs != 0L) {
+            Log.d(
+                TAG,
+                "Reset playback stall window reason=$reason, channel=${currentChannel?.name}, index=$currentStreamIndex"
+            )
+        }
+        playbackStallWindowStartMs = 0L
+        playbackStallStartPositionMs = 0L
     }
 
 
