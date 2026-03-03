@@ -25,6 +25,7 @@ import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -101,17 +102,48 @@ class MainActivity : AppCompatActivity() {
 
     private val playerListener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
-            if (audioTrackReselectDoneForPlayback) return
-            if (!player.playWhenReady) return
-            if (player.playbackState != Player.STATE_READY) return
-            if (tracks.groups.none { it.type == C.TRACK_TYPE_AUDIO && it.length > 1 }) return
+            Log.i(
+                TAG,
+                "Tracks changed channel=${currentChannel?.name}, index=$currentStreamIndex, groups=${describeTrackGroups(tracks)}"
+            )
+            if (audioTrackReselectDoneForPlayback) {
+                Log.d(TAG, "Skip audio fallback: already done for current playback")
+                return
+            }
+            if (!player.playWhenReady) {
+                Log.d(TAG, "Skip audio fallback: playWhenReady=false")
+                return
+            }
+            if (player.playbackState != Player.STATE_READY) {
+                Log.d(TAG, "Skip audio fallback: player not ready state=${player.playbackState}")
+                return
+            }
+            if (tracks.groups.none { it.type == C.TRACK_TYPE_AUDIO && it.length > 1 }) {
+                Log.d(TAG, "Skip audio fallback: no audio group with multiple tracks")
+                return
+            }
 
             audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
             audioTrackReselectRunnable = Runnable {
+                Log.d(TAG, "Run delayed audio fallback check")
                 applyAudioTrackFallbackIfNeeded()
             }.also {
                 binding.playerView.postDelayed(it, AUDIO_TRACK_RESELECT_DELAY_MS)
             }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            Log.i(
+                TAG,
+                "Playback state changed state=$playbackState, playWhenReady=${player.playWhenReady}, isPlaying=${player.isPlaying}, channel=${currentChannel?.name}, index=$currentStreamIndex, position=${player.currentPosition}"
+            )
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            Log.i(
+                TAG,
+                "isPlaying changed isPlaying=$isPlaying, state=${player.playbackState}, channel=${currentChannel?.name}, index=$currentStreamIndex, position=${player.currentPosition}"
+            )
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -430,6 +462,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playChannel(channel: Channel, streamIndex: Int) {
+        Log.d(
+            TAG,
+            "Play channel request channel=${channel.name}, category=${channel.category}, streamIndex=$streamIndex, streamCount=${channel.streamUrls.size}"
+        )
         isSwitchingStream = false
         resetRetryState()
         resetForcedHlsRetryState()
@@ -679,7 +715,7 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun shouldAutoSwitch(error: PlaybackException): Boolean {
-        return when (error.errorCode) {
+        val result = when (error.errorCode) {
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
@@ -695,16 +731,20 @@ class MainActivity : AppCompatActivity() {
 
             else -> false
         }
+        Log.d(TAG, "Auto-switch decision code=${error.errorCodeName}, result=$result")
+        return result
     }
 
     private fun isTransientNetworkError(error: PlaybackException): Boolean {
-        return when (error.errorCode) {
+        val result = when (error.errorCode) {
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
             PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> true
 
             else -> false
         }
+        Log.d(TAG, "Transient-network decision code=${error.errorCodeName}, result=$result")
+        return result
     }
 
     private fun retryCurrentStream(channel: Channel, index: Int, forceHls: Boolean = false) {
@@ -716,6 +756,11 @@ class MainActivity : AppCompatActivity() {
             forcedHlsRetryChannelKey = channelKey
             forcedHlsRetryStreamIndex = index
         }
+
+        Log.w(
+            TAG,
+            "Retry current stream channel=${channel.name}, index=$index, forceHls=$forceHls, inferredMime=${inferMimeType(streamUrl)}"
+        )
 
         runCatching {
             resetAudioTrackReselectState()
@@ -733,15 +778,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun shouldRetryCurrentStream(channelKey: String, streamIndex: Int): Boolean {
-        return retriedChannelKey != channelKey || retriedStreamIndex != streamIndex
+        val result = retriedChannelKey != channelKey || retriedStreamIndex != streamIndex
+        Log.d(
+            TAG,
+            "Retry-current decision channelKey=$channelKey, streamIndex=$streamIndex, lastKey=$retriedChannelKey, lastIndex=$retriedStreamIndex, result=$result"
+        )
+        return result
     }
 
     private fun shouldRetryAsForcedHls(error: PlaybackException, channelKey: String, streamIndex: Int): Boolean {
         if (error.errorCode != PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED) {
+            Log.d(
+                TAG,
+                "Forced-HLS decision skipped: errorCode=${error.errorCodeName}, channelKey=$channelKey, streamIndex=$streamIndex"
+            )
             return false
         }
 
-        return forcedHlsRetryChannelKey != channelKey || forcedHlsRetryStreamIndex != streamIndex
+        val result = forcedHlsRetryChannelKey != channelKey || forcedHlsRetryStreamIndex != streamIndex
+        Log.d(
+            TAG,
+            "Forced-HLS decision channelKey=$channelKey, streamIndex=$streamIndex, lastKey=$forcedHlsRetryChannelKey, lastIndex=$forcedHlsRetryStreamIndex, result=$result"
+        )
+        return result
     }
 
     private fun canSwitchInShortWindow(channelKey: String): Boolean {
@@ -755,7 +814,12 @@ class MainActivity : AppCompatActivity() {
             switchTimestampsMs.removeFirst()
         }
 
-        return switchTimestampsMs.size < MAX_SWITCH_COUNT_IN_WINDOW
+        val result = switchTimestampsMs.size < MAX_SWITCH_COUNT_IN_WINDOW
+        Log.d(
+            TAG,
+            "Short-window switch decision channelKey=$channelKey, switchCount=${switchTimestampsMs.size}, result=$result"
+        )
+        return result
     }
 
     private fun recordAutoSwitch(channelKey: String) {
@@ -770,6 +834,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         switchTimestampsMs.addLast(now)
+        Log.d(
+            TAG,
+            "Recorded auto-switch channelKey=$channelKey, switchCount=${switchTimestampsMs.size}"
+        )
         resetRetryState()
         resetForcedHlsRetryState()
     }
@@ -795,6 +863,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildMediaItem(url: String, forceHls: Boolean = false): MediaItem {
         val inferredMimeType = if (forceHls) MimeTypes.APPLICATION_M3U8 else inferMimeType(url)
+        Log.d(
+            TAG,
+            "Build media item url=$url, forceHls=$forceHls, inferredMime=$inferredMimeType"
+        )
         return MediaItem.Builder()
             .setUri(url)
             .apply {
@@ -821,10 +893,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyAudioTrackFallbackIfNeeded() {
-        if (audioTrackReselectDoneForPlayback) return
+        if (audioTrackReselectDoneForPlayback) {
+            Log.d(TAG, "Skip fallback check: already done")
+            return
+        }
 
         val currentTracks = player.currentTracks
         val audioGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        Log.i(
+            TAG,
+            "Audio fallback check channel=${currentChannel?.name}, index=$currentStreamIndex, audioGroupCount=${audioGroups.size}, groups=${describeTrackGroups(currentTracks)}"
+        )
         if (audioGroups.isEmpty()) {
             audioTrackReselectDoneForPlayback = true
             Log.w(TAG, "No audio track group found after ready state")
@@ -846,7 +925,7 @@ class MainActivity : AppCompatActivity() {
                 val fallbackFormat = group.getTrackFormat(fallbackIndex)
                 Log.w(
                     TAG,
-                    "Audio fallback switch channel=${currentChannel?.name}, index=$currentStreamIndex, selectedCodec=${selectedFormat.sampleMimeType}, fallbackCodec=${fallbackFormat.sampleMimeType}"
+                    "Audio fallback switch channel=${currentChannel?.name}, index=$currentStreamIndex, selected=${describeFormat(selectedFormat)}, fallback=${describeFormat(fallbackFormat)}"
                 )
             }
 
@@ -860,6 +939,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         val (group, trackIndex) = candidate
+        val targetFormat = group.getTrackFormat(trackIndex)
+        Log.i(
+            TAG,
+            "Apply audio override channel=${currentChannel?.name}, index=$currentStreamIndex, targetTrack=$trackIndex, target=${describeFormat(targetFormat)}"
+        )
         val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
         trackSelector.setParameters(
             trackSelector
@@ -881,6 +965,29 @@ class MainActivity : AppCompatActivity() {
                 .buildUponParameters()
                 .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
         )
+        Log.d(TAG, "Reset audio track fallback state and cleared audio overrides")
+    }
+
+    private fun describeTrackGroups(tracks: Tracks): String {
+        return tracks.groups.joinToString(separator = " || ") { group ->
+            val typeName = when (group.type) {
+                C.TRACK_TYPE_AUDIO -> "audio"
+                C.TRACK_TYPE_VIDEO -> "video"
+                C.TRACK_TYPE_TEXT -> "text"
+                C.TRACK_TYPE_METADATA -> "metadata"
+                else -> group.type.toString()
+            }
+            val details = (0 until group.length).joinToString(separator = ";") { idx ->
+                val format = group.getTrackFormat(idx)
+                "#${idx}{selected=${group.isTrackSelected(idx)},supported=${group.isTrackSupported(idx)},${describeFormat(format)}}"
+            }
+            "$typeName[$details]"
+        }
+    }
+
+    private fun describeFormat(format: Format?): String {
+        if (format == null) return "null"
+        return "id=${format.id},mime=${format.sampleMimeType},lang=${format.language},channels=${format.channelCount},rate=${format.sampleRate},bitrate=${format.bitrate},label=${format.label},codecs=${format.codecs}"
     }
 
     private fun checkUpdateSilently() {
