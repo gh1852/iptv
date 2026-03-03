@@ -1,5 +1,6 @@
 package com.jons.iptv.playback
 
+import android.os.Build
 import android.util.Log
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -48,6 +49,7 @@ class PlayerEngineCoordinator(
         private const val LOAD_ERROR_NETWORK_RETRY_DELAY_MS = 300L
         private const val LOAD_ERROR_OTHER_RETRY_DELAY_MS = 600L
         private const val OVERLAY_AUTO_HIDE_DELAY_MS = 3_000L
+        private const val MEDIA3_VERSION = "1.6.0"
     }
 
     private lateinit var player: ExoPlayer
@@ -150,7 +152,7 @@ class PlayerEngineCoordinator(
             .setConnectTimeoutMs(HTTP_CONNECT_TIMEOUT_MS)
             .setReadTimeoutMs(HTTP_READ_TIMEOUT_MS)
             .setKeepPostFor302Redirects(true)
-            .setUserAgent("Mozilla/5.0 (Android) IPTV/1.0")
+            .setUserAgent(buildUserAgent())
 
         val dataSourceFactory = DefaultDataSource.Factory(activity, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
@@ -269,6 +271,10 @@ class PlayerEngineCoordinator(
     private fun isDecoderFailure(error: PlaybackException): Boolean {
         return error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
             error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
+    }
+
+    private fun buildUserAgent(): String {
+        return "com.android.chrome/131.0.6778.200 (Linux;Android ${Build.VERSION.RELEASE}) AndroidXMedia3/$MEDIA3_VERSION"
     }
 
     private fun showOverlay(channel: Channel) {

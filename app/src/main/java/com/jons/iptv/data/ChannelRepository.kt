@@ -1,5 +1,6 @@
 package com.jons.iptv.data
 
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -95,7 +96,7 @@ class ChannelRepository(
         for (candidateUrl in buildProxyCandidates(playlistUrl)) {
             val request = Request.Builder()
                 .url(candidateUrl)
-                .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
+                .header("User-Agent", buildUserAgent())
                 .get()
                 .build()
 
@@ -193,7 +194,12 @@ class ChannelRepository(
         return "$logoBaseUrl/$encodedName.png"
     }
 
+    private fun buildUserAgent(): String {
+        return "com.android.chrome/131.0.6778.200 (Linux;Android ${Build.VERSION.RELEASE}) AndroidXMedia3/$MEDIA3_VERSION"
+    }
+
     companion object {
+        private const val MEDIA3_VERSION = "1.6.0"
         private val PROXY_PREFIXES = listOf(
             "https://ghfast.top/",
             "https://edgeone.gh-proxy.org/"

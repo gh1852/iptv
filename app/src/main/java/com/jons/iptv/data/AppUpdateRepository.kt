@@ -1,5 +1,6 @@
 package com.jons.iptv.data
 
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -48,7 +49,7 @@ class AppUpdateRepository(
         for (candidateUrl in buildProxyCandidates(metadataUrl)) {
             val request = Request.Builder()
                 .url(candidateUrl)
-                .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
+                .header("User-Agent", buildUserAgent())
                 .get()
                 .build()
 
@@ -90,7 +91,7 @@ class AppUpdateRepository(
         for (candidateUrl in buildProxyCandidates(apkUrl)) {
             val request = Request.Builder()
                 .url(candidateUrl)
-                .header("User-Agent", "Mozilla/5.0 (Android) IPTV/1.0")
+                .header("User-Agent", buildUserAgent())
                 .get()
                 .build()
 
@@ -149,7 +150,12 @@ class AppUpdateRepository(
         return latestVersionCode > currentVersionCode
     }
 
+    private fun buildUserAgent(): String {
+        return "com.android.chrome/131.0.6778.200 (Linux;Android ${Build.VERSION.RELEASE}) AndroidXMedia3/$MEDIA3_VERSION"
+    }
+
     private companion object {
+        private const val MEDIA3_VERSION = "1.6.0"
         val PROXY_PREFIXES = listOf(
             "https://edgeone.gh-proxy.org/",
             "https://ghfast.top/"
