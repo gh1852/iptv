@@ -210,6 +210,15 @@ class MainActivity : AppCompatActivity() {
                 error
             )
 
+            if (isDecoderFailure(error)) {
+                Log.w(
+                    TAG,
+                    "Detected decoder failure. Recreate player before next attempt channel=${channel.name}, index=$currentStreamIndex"
+                )
+                recoverFromDecoderFailure(channel)
+                return
+            }
+
             if (!shouldAutoSwitch(error)) {
                 Log.w(TAG, "Skip auto-switch for error code=${error.errorCodeName}")
                 return
@@ -910,6 +919,43 @@ class MainActivity : AppCompatActivity() {
         }
         Log.d(TAG, "Auto-switch decision code=${error.errorCodeName}, result=$result")
         return result
+    }
+
+    private fun isDecoderFailure(error: PlaybackException): Boolean {
+        return error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+            error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
+    }
+
+    private fun recoverFromDecoderFailure(channel: Channel) {
+        val nextIndex = currentStreamIndex + 1
+        val hasNext = nextIndex < channel.streamUrls.size
+
+        runCatching {
+            player.removeListener(playerListener)
+            player.release()
+            initPlayer()
+            if (hasNext) {
+                resetRetryState()
+                resetForcedHlsRetryState()
+                resetUnsupportedAudioSwitchState()
+                stopPlaybackStallMonitor("decoder_recover")
+                if (tryPlayFrom(channel, nextIndex)) {
+                    recordAutoSwitch(buildChannelKey(channel))
+                    isSwitchingStream = true
+                    Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
+                    return
+                }
+            }
+        }.onFailure { throwable ->
+            Log.e(
+                TAG,
+                "Decoder recovery failed channel=${channel.name}, index=$currentStreamIndex",
+                throwable
+            )
+        }
+
+        isSwitchingStream = false
+        showPlaybackFailureDialog(channel)
     }
 
     private fun isTransientNetworkError(error: PlaybackException): Boolean {
