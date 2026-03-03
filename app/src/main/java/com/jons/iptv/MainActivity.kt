@@ -25,13 +25,10 @@ import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -51,11 +48,15 @@ import com.jons.iptv.data.Channel
 import com.jons.iptv.data.ChannelRepository
 import com.jons.iptv.data.UpdateInfo
 import com.jons.iptv.databinding.ActivityMainBinding
+import com.jons.iptv.playback.ExoPlayerAdapter
+import com.jons.iptv.playback.PlaybackController
+import com.jons.iptv.playback.PlaybackLogger
+import com.jons.iptv.playback.PlaybackStore
 import com.jons.iptv.ui.GroupedChannelAdapter
-import kotlin.math.abs
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.LinkedHashMap
+
 class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
@@ -65,7 +66,6 @@ class MainActivity : AppCompatActivity() {
         private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_500
         private const val TRACK_MAX_VIDEO_SIZE_SD_WIDTH = 1280
         private const val TRACK_MAX_VIDEO_SIZE_SD_HEIGHT = 720
-        private const val SWITCH_WINDOW_MS = 20_000L
         private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
         private const val HTTP_READ_TIMEOUT_MS = 8_000
         private const val LOAD_ERROR_MIN_RETRY_COUNT = 0
@@ -73,10 +73,6 @@ class MainActivity : AppCompatActivity() {
         private const val LOAD_ERROR_OTHER_RETRY_DELAY_MS = 600L
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
-        private const val AUDIO_TRACK_RESELECT_DELAY_MS = 650L
-        private const val PLAYBACK_STALL_DETECT_WINDOW_MS = 1_500L
-        private const val PLAYBACK_STALL_POSITION_DELTA_MS = 120L
-        private const val PLAYBACK_STALL_CHECK_INTERVAL_MS = 500L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -104,92 +100,19 @@ class MainActivity : AppCompatActivity() {
     private var updateDialog: Dialog? = null
     private var updateDialogAnimatedDismiss: Boolean = false
     private var isSwitchingStream: Boolean = false
-    private var retriedChannelKey: String? = null
-    private var retriedStreamIndex: Int = -1
-    private var forcedHlsRetryChannelKey: String? = null
-    private var forcedHlsRetryStreamIndex: Int = -1
-    private var unsupportedAudioSwitchChannelKey: String? = null
-    private val unsupportedAudioSwitchedIndices = mutableSetOf<Int>()
-    private var switchWindowChannelKey: String? = null
-    private val switchTimestampsMs = ArrayDeque<Long>()
     private var lastBackPressedAtMs: Long = 0L
-    private var audioTrackReselectDoneForPlayback: Boolean = false
-    private var audioTrackReselectRunnable: Runnable? = null
-    private var playbackStallWindowStartMs: Long = 0L
-    private var playbackStallStartPositionMs: Long = 0L
-    private var playbackStallCheckRunnable: Runnable? = null
     private var decoderRecoveryRequired: Boolean = false
 
+    private val playbackStore = PlaybackStore()
+    private lateinit var playbackController: PlaybackController
+
     private val playerListener = object : Player.Listener {
-        override fun onTracksChanged(tracks: Tracks) {
-            Log.i(
-                TAG,
-                "Tracks changed channel=${currentChannel?.name}, index=$currentStreamIndex, groups=${describeTrackGroups(tracks)}"
-            )
-            if (audioTrackReselectDoneForPlayback) {
-                Log.d(TAG, "Skip audio fallback: already done for current playback")
-                return
-            }
-            if (!player.playWhenReady) {
-                Log.d(TAG, "Skip audio fallback: playWhenReady=false")
-                return
-            }
-            if (player.playbackState != Player.STATE_READY) {
-                Log.d(TAG, "Player not ready yet, continue unsupported-audio detection state=${player.playbackState}")
-            }
-
-            val channel = currentChannel
-            if (channel != null && shouldSwitchForUnsupportedAudio(tracks, channel, currentStreamIndex)) {
-                val unsupportedIndex = currentStreamIndex
-                Log.w(
-                    TAG,
-                    "Detected unsupported audio for current stream. Try next source channel=${channel.name}, index=$unsupportedIndex"
-                )
-                if (tryPlayFrom(channel, unsupportedIndex + 1)) {
-                    markUnsupportedAudioSwitched(buildChannelKey(channel), unsupportedIndex)
-                    if (!isSwitchingStream) {
-                        isSwitchingStream = true
-                        Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    isSwitchingStream = false
-                    showPlaybackFailureDialog(channel)
-                }
-                return
-            }
-
-            if (player.playbackState != Player.STATE_READY) {
-                Log.d(TAG, "Skip audio fallback: player not ready state=${player.playbackState}")
-                return
-            }
-
-            if (tracks.groups.none { it.type == C.TRACK_TYPE_AUDIO && it.length > 1 }) {
-                Log.d(TAG, "Skip audio fallback: no audio group with multiple tracks")
-                return
-            }
-
-            audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
-            audioTrackReselectRunnable = Runnable {
-                Log.d(TAG, "Run delayed audio fallback check")
-                applyAudioTrackFallbackIfNeeded()
-            }.also {
-                binding.playerView.postDelayed(it, AUDIO_TRACK_RESELECT_DELAY_MS)
-            }
-        }
-
-
         override fun onPlaybackStateChanged(playbackState: Int) {
             Log.i(
                 TAG,
                 "Playback state changed state=$playbackState, playWhenReady=${player.playWhenReady}, isPlaying=${player.isPlaying}, channel=${currentChannel?.name}, index=$currentStreamIndex, position=${player.currentPosition}"
             )
-
-            when (playbackState) {
-                Player.STATE_BUFFERING,
-                Player.STATE_READY -> startPlaybackStallMonitor()
-                Player.STATE_IDLE,
-                Player.STATE_ENDED -> stopPlaybackStallMonitor("state=$playbackState")
-            }
+            playbackController.onPlaybackStateChanged(playbackState)
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -201,162 +124,12 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPlayerError(error: PlaybackException) {
             if (isFinishing || isDestroyed) return
-            val channel = currentChannel ?: return
-
-            val currentUrl = channel.streamUrls.getOrNull(currentStreamIndex)
-            val channelKey = buildChannelKey(channel)
-            Log.w(
-                TAG,
-                "Playback error channel=${channel.name}, index=$currentStreamIndex, url=$currentUrl, code=${error.errorCodeName}",
-                error
-            )
-
             if (isDecoderFailure(error)) {
-                Log.w(
-                    TAG,
-                    "Detected decoder failure. Recreate player before next attempt channel=${channel.name}, index=$currentStreamIndex"
-                )
-                recoverFromDecoderFailure(channel)
-                return
+                decoderRecoveryRequired = true
             }
-
-            if (!shouldAutoSwitch(error)) {
-                Log.w(TAG, "Skip auto-switch for error code=${error.errorCodeName}")
-                return
-            }
-
-            if (isTransientNetworkError(error) && shouldRetryCurrentStream(channelKey, currentStreamIndex)) {
-                Log.w(
-                    TAG,
-                    "Retry current stream once channel=${channel.name}, index=$currentStreamIndex, code=${error.errorCodeName}"
-                )
-                retryCurrentStream(channel, currentStreamIndex)
-                return
-            }
-
-            if (shouldRetryAsForcedHls(error, channelKey, currentStreamIndex)) {
-                Log.w(
-                    TAG,
-                    "Retry current stream with forced HLS channel=${channel.name}, index=$currentStreamIndex"
-                )
-                retryCurrentStream(channel, currentStreamIndex, forceHls = true)
-                return
-            }
-
-            if (!canSwitchInShortWindow(channel)) {
-                Log.w(
-                    TAG,
-                    "Skip auto-switch due to short-window limit channel=${channel.name}, switchCount=${switchTimestampsMs.size}"
-                )
-                isSwitchingStream = false
-                showPlaybackFailureDialog(channel)
-                return
-            }
-
-            if (tryPlayFrom(channel, currentStreamIndex + 1)) {
-                recordAutoSwitch(channelKey)
-                if (!isSwitchingStream) {
-                    isSwitchingStream = true
-                    Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
-                }
-                return
-            }
-
-            isSwitchingStream = false
-            showPlaybackFailureDialog(channel)
+            playbackController.onPlayerError(error)
         }
     }
-
-    private fun startPlaybackStallMonitor() {
-        if (playbackStallCheckRunnable != null) {
-            return
-        }
-        playbackStallCheckRunnable = Runnable {
-            if (isFinishing || isDestroyed) {
-                stopPlaybackStallMonitor("activity_destroying")
-                return@Runnable
-            }
-            if (playbackStallCheckRunnable == null) {
-                return@Runnable
-            }
-            maybeHandlePlaybackStall()
-            val runnable = playbackStallCheckRunnable ?: return@Runnable
-            binding.playerView.postDelayed(runnable, PLAYBACK_STALL_CHECK_INTERVAL_MS)
-        }
-        val runnable = playbackStallCheckRunnable ?: return
-        binding.playerView.postDelayed(runnable, PLAYBACK_STALL_CHECK_INTERVAL_MS)
-    }
-
-    private fun stopPlaybackStallMonitor(reason: String) {
-        playbackStallCheckRunnable?.let { binding.playerView.removeCallbacks(it) }
-        playbackStallCheckRunnable = null
-        resetPlaybackStallWindow(reason)
-    }
-
-    private fun maybeHandlePlaybackStall() {
-        val channel = currentChannel ?: return
-        if (isSwitchingStream || !player.playWhenReady) {
-            resetPlaybackStallWindow("switching_or_paused")
-            return
-        }
-
-        val now = System.currentTimeMillis()
-        val position = player.currentPosition
-        if (playbackStallWindowStartMs == 0L) {
-            playbackStallWindowStartMs = now
-            playbackStallStartPositionMs = position
-            return
-        }
-
-        val elapsed = now - playbackStallWindowStartMs
-        val positionDelta = abs(position - playbackStallStartPositionMs)
-        if (elapsed < PLAYBACK_STALL_DETECT_WINDOW_MS) {
-            return
-        }
-
-        if (positionDelta > PLAYBACK_STALL_POSITION_DELTA_MS) {
-            resetPlaybackStallWindow("position_advanced")
-            return
-        }
-
-        if (!canSwitchInShortWindow(channel)) {
-            Log.w(
-                TAG,
-                "Playback stall detected but short-window limit reached channel=${channel.name}, index=$currentStreamIndex"
-            )
-            stopPlaybackStallMonitor("switch_limit")
-            return
-        }
-
-        val nextIndex = currentStreamIndex + 1
-        Log.w(
-            TAG,
-            "Playback stall detected. Try next source channel=${channel.name}, index=$currentStreamIndex, elapsed=${elapsed}ms, positionDelta=${positionDelta}ms"
-        )
-        if (tryPlayFrom(channel, nextIndex)) {
-            recordAutoSwitch(buildChannelKey(channel))
-            isSwitchingStream = true
-            Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
-            stopPlaybackStallMonitor("switched")
-            return
-        }
-
-        isSwitchingStream = false
-        showPlaybackFailureDialog(channel)
-        stopPlaybackStallMonitor("switch_failed")
-    }
-
-    private fun resetPlaybackStallWindow(reason: String) {
-        if (playbackStallWindowStartMs != 0L) {
-            Log.d(
-                TAG,
-                "Reset playback stall window reason=$reason, channel=${currentChannel?.name}, index=$currentStreamIndex"
-            )
-        }
-        playbackStallWindowStartMs = 0L
-        playbackStallStartPositionMs = 0L
-    }
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -365,6 +138,7 @@ class MainActivity : AppCompatActivity() {
         repository.preloadChannels()
         enableFullscreenIfPhone()
         initPlayer()
+        initPlaybackController()
         initList()
         initMenuInteractions()
         loadChannels()
@@ -554,7 +328,6 @@ class MainActivity : AppCompatActivity() {
                         val delayMs = when (exception) {
                             is HttpDataSource.HttpDataSourceException,
                             is HttpDataSource.InvalidResponseCodeException -> LOAD_ERROR_NETWORK_RETRY_DELAY_MS
-
                             else -> LOAD_ERROR_OTHER_RETRY_DELAY_MS
                         }
                         Log.w(
@@ -585,6 +358,47 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
+    private fun initPlaybackController() {
+        val logger = PlaybackLogger(TAG)
+        val adapter = ExoPlayerAdapter(player) { url -> buildMediaItem(url) }
+
+        playbackController = PlaybackController(
+            store = playbackStore,
+            playerAdapter = adapter,
+            logger = logger,
+            callbacks = object : PlaybackController.Callbacks {
+                override fun onPrepareToPlay(channel: Channel, streamIndex: Int, streamUrl: String) {
+                    currentChannel = channel
+                    currentStreamIndex = streamIndex
+                }
+
+                override fun onSwitchingSource(
+                    channel: Channel,
+                    fromIndex: Int,
+                    toIndex: Int,
+                    reason: String
+                ) {
+                    if (!isSwitchingStream) {
+                        isSwitchingStream = true
+                        Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onStreamPlaying(channel: Channel, streamIndex: Int) {
+                    isSwitchingStream = false
+                    playbackFailureDialog?.dismiss()
+                    groupedChannelAdapter.setPlayingChannel(channel)
+                    refreshAdjacentChannels()
+                    showOverlay(channel)
+                }
+
+                override fun onAllSourcesFailed(channel: Channel) {
+                    isSwitchingStream = false
+                    showPlaybackFailureDialog(channel)
+                }
+            }
+        )
+    }
 
     private fun initList() {
         binding.groupedChannelRecycler.layoutManager = LinearLayoutManager(this)
@@ -653,10 +467,10 @@ class MainActivity : AppCompatActivity() {
 
         Log.w(TAG, "Recreate player for decoder recovery reason=$reason")
         runCatching {
-            stopPlaybackStallMonitor("decoder_recreate_$reason")
             player.removeListener(playerListener)
             player.release()
             initPlayer()
+            initPlaybackController()
             decoderRecoveryRequired = false
         }.onFailure { throwable ->
             Log.e(TAG, "Player recreation failed reason=$reason", throwable)
@@ -671,62 +485,7 @@ class MainActivity : AppCompatActivity() {
             "Play channel request channel=${channel.name}, category=${channel.category}, streamIndex=$streamIndex, streamCount=${channel.streamUrls.size}"
         )
         isSwitchingStream = false
-        resetRetryState()
-        resetForcedHlsRetryState()
-        resetUnsupportedAudioSwitchState()
-        stopPlaybackStallMonitor("play_channel")
-        resetSwitchWindow(channel)
-        if (!tryPlayFrom(channel, streamIndex)) {
-            showPlaybackFailureDialog(channel)
-        }
-    }
-
-    private fun tryPlayFrom(channel: Channel, startIndex: Int): Boolean {
-        if (channel.streamUrls.isEmpty() || startIndex !in channel.streamUrls.indices) {
-            Log.w(
-                TAG,
-                "Skip playback channel=${channel.name}, urlCount=${channel.streamUrls.size}, startIndex=$startIndex"
-            )
-            return false
-        }
-
-        Log.d(
-            TAG,
-            "Start playback attempt channel=${channel.name}, urlCount=${channel.streamUrls.size}, startIndex=$startIndex"
-        )
-
-        for (index in startIndex until channel.streamUrls.size) {
-            val streamUrl = channel.streamUrls[index]
-            val played = runCatching {
-                currentChannel = channel
-                currentStreamIndex = index
-                resetAudioTrackReselectState()
-                val mediaItem = buildMediaItem(streamUrl)
-                player.setMediaItem(mediaItem)
-                player.prepare()
-                player.playWhenReady = true
-            }.onFailure { throwable ->
-                Log.e(
-                    TAG,
-                    "Playback setup failed channel=${channel.name}, index=$index, url=$streamUrl",
-                    throwable
-                )
-            }.isSuccess
-
-            if (played) {
-                Log.d(TAG, "Playback setup success channel=${channel.name}, index=$index, url=$streamUrl")
-                resetRetryState()
-                resetForcedHlsRetryState()
-                playbackFailureDialog?.dismiss()
-                groupedChannelAdapter.setPlayingChannel(channel)
-                refreshAdjacentChannels()
-                showOverlay(channel)
-                return true
-            }
-        }
-
-        Log.w(TAG, "All playback setup attempts failed channel=${channel.name}, startIndex=$startIndex")
-        return false
+        playbackController.play(channel, streamIndex)
     }
 
     private fun showMenu() {
@@ -788,7 +547,6 @@ class MainActivity : AppCompatActivity() {
 
         requestFirstItemFocus(recyclerView)
     }
-
 
     private fun RecyclerView.findFocusedItemPosition(): Int? {
         val focused = findFocus() ?: return null
@@ -919,206 +677,14 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
-
-    private fun shouldAutoSwitch(error: PlaybackException): Boolean {
-        val result = when (error.errorCode) {
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
-            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-            PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
-            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-            PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
-            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
-            PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
-            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-            PlaybackException.ERROR_CODE_DECODING_FAILED -> true
-
-            else -> false
-        }
-        Log.d(TAG, "Auto-switch decision code=${error.errorCodeName}, result=$result")
-        return result
-    }
-
     private fun isDecoderFailure(error: PlaybackException): Boolean {
         return error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
             error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
     }
 
-    private fun recoverFromDecoderFailure(channel: Channel) {
-        decoderRecoveryRequired = true
-        stopPlaybackStallMonitor("decoder_recover")
-
-        val nextIndex = currentStreamIndex + 1
-        if (nextIndex >= channel.streamUrls.size) {
-            Log.w(
-                TAG,
-                "Decoder failure on last source. Show failure dialog channel=${channel.name}, index=$currentStreamIndex"
-            )
-            isSwitchingStream = false
-            showPlaybackFailureDialog(channel)
-            return
-        }
-
-        if (!canSwitchInShortWindow(channel)) {
-            Log.w(
-                TAG,
-                "Decoder failure detected but short-window limit reached channel=${channel.name}, index=$currentStreamIndex"
-            )
-            isSwitchingStream = false
-            showPlaybackFailureDialog(channel)
-            return
-        }
-
-        Log.w(
-            TAG,
-            "Decoder failure recovery: recreate player and switch next source channel=${channel.name}, from=$currentStreamIndex, to=$nextIndex"
-        )
-        recordAutoSwitch(buildChannelKey(channel))
-        isSwitchingStream = true
-        Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
-        playChannel(channel, nextIndex)
-    }
-
-    private fun isTransientNetworkError(error: PlaybackException): Boolean {
-        val result = when (error.errorCode) {
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> true
-
-            else -> false
-        }
-        Log.d(TAG, "Transient-network decision code=${error.errorCodeName}, result=$result")
-        return result
-    }
-
-    private fun retryCurrentStream(channel: Channel, index: Int, forceHls: Boolean = false) {
-        val streamUrl = channel.streamUrls.getOrNull(index) ?: return
-        val channelKey = buildChannelKey(channel)
-        retriedChannelKey = channelKey
-        retriedStreamIndex = index
-        if (forceHls) {
-            forcedHlsRetryChannelKey = channelKey
-            forcedHlsRetryStreamIndex = index
-        }
-
-        Log.w(
-            TAG,
-            "Retry current stream channel=${channel.name}, index=$index, forceHls=$forceHls, inferredMime=${inferMimeType(streamUrl)}"
-        )
-
-        runCatching {
-            resetAudioTrackReselectState()
-            stopPlaybackStallMonitor("retry_current_stream")
-            val mediaItem = buildMediaItem(streamUrl, forceHls = forceHls)
-            player.setMediaItem(mediaItem)
-            player.prepare()
-            player.playWhenReady = true
-        }.onFailure { throwable ->
-            Log.e(
-                TAG,
-                "Retry setup failed channel=${channel.name}, index=$index, url=$streamUrl, forceHls=$forceHls",
-                throwable
-            )
-        }
-    }
-
-    private fun shouldRetryCurrentStream(channelKey: String, streamIndex: Int): Boolean {
-        val result = retriedChannelKey != channelKey || retriedStreamIndex != streamIndex
-        Log.d(
-            TAG,
-            "Retry-current decision channelKey=$channelKey, streamIndex=$streamIndex, lastKey=$retriedChannelKey, lastIndex=$retriedStreamIndex, result=$result"
-        )
-        return result
-    }
-
-    private fun shouldRetryAsForcedHls(error: PlaybackException, channelKey: String, streamIndex: Int): Boolean {
-        if (error.errorCode != PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED) {
-            Log.d(
-                TAG,
-                "Forced-HLS decision skipped: errorCode=${error.errorCodeName}, channelKey=$channelKey, streamIndex=$streamIndex"
-            )
-            return false
-        }
-
-        val result = forcedHlsRetryChannelKey != channelKey || forcedHlsRetryStreamIndex != streamIndex
-        Log.d(
-            TAG,
-            "Forced-HLS decision channelKey=$channelKey, streamIndex=$streamIndex, lastKey=$forcedHlsRetryChannelKey, lastIndex=$forcedHlsRetryStreamIndex, result=$result"
-        )
-        return result
-    }
-
-    private fun canSwitchInShortWindow(channel: Channel): Boolean {
-        if (channel.streamUrls.size <= 2) {
-            return true
-        }
-
-        val channelKey = buildChannelKey(channel)
-        val now = System.currentTimeMillis()
-        if (switchWindowChannelKey != channelKey) {
-            switchWindowChannelKey = channelKey
-            switchTimestampsMs.clear()
-        }
-
-        while (switchTimestampsMs.isNotEmpty() && now - switchTimestampsMs.first() > SWITCH_WINDOW_MS) {
-            switchTimestampsMs.removeFirst()
-        }
-
-        val result = switchTimestampsMs.size < channel.streamUrls.size - 1
-        Log.d(
-            TAG,
-            "Short-window switch decision channelKey=$channelKey, switchCount=${switchTimestampsMs.size}, maxAllowed=${channel.streamUrls.size - 1}, result=$result"
-        )
-        return result
-    }
-
-    private fun recordAutoSwitch(channelKey: String) {
-        val now = System.currentTimeMillis()
-        if (switchWindowChannelKey != channelKey) {
-            switchWindowChannelKey = channelKey
-            switchTimestampsMs.clear()
-        }
-
-        while (switchTimestampsMs.isNotEmpty() && now - switchTimestampsMs.first() > SWITCH_WINDOW_MS) {
-            switchTimestampsMs.removeFirst()
-        }
-
-        switchTimestampsMs.addLast(now)
-        Log.d(
-            TAG,
-            "Recorded auto-switch channelKey=$channelKey, switchCount=${switchTimestampsMs.size}"
-        )
-        resetRetryState()
-        resetForcedHlsRetryState()
-    }
-
-    private fun resetRetryState() {
-        retriedChannelKey = null
-        retriedStreamIndex = -1
-    }
-
-    private fun resetForcedHlsRetryState() {
-        forcedHlsRetryChannelKey = null
-        forcedHlsRetryStreamIndex = -1
-    }
-
-    private fun resetSwitchWindow(channel: Channel) {
-        switchWindowChannelKey = buildChannelKey(channel)
-        switchTimestampsMs.clear()
-    }
-
-    private fun buildChannelKey(channel: Channel): String {
-        return "${channel.category}|${channel.name}"
-    }
-
-    private fun buildMediaItem(url: String, forceHls: Boolean = false): MediaItem {
-        val inferredMimeType = if (forceHls) MimeTypes.APPLICATION_M3U8 else inferMimeType(url)
-        Log.d(
-            TAG,
-            "Build media item url=$url, forceHls=$forceHls, inferredMime=$inferredMimeType"
-        )
+    private fun buildMediaItem(url: String): MediaItem {
+        val inferredMimeType = inferMimeType(url)
+        Log.d(TAG, "Build media item url=$url, inferredMime=$inferredMimeType")
         return MediaItem.Builder()
             .setUri(url)
             .apply {
@@ -1142,157 +708,6 @@ class MainActivity : AppCompatActivity() {
             path.endsWith(".ts") || normalizedUrl.contains(".ts?") -> MimeTypes.VIDEO_MP2T
             else -> null
         }
-    }
-
-    private fun applyAudioTrackFallbackIfNeeded() {
-        if (audioTrackReselectDoneForPlayback) {
-            Log.d(TAG, "Skip fallback check: already done")
-            return
-        }
-
-        val currentTracks = player.currentTracks
-        val audioGroups = currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
-        Log.i(
-            TAG,
-            "Audio fallback check channel=${currentChannel?.name}, index=$currentStreamIndex, audioGroupCount=${audioGroups.size}, groups=${describeTrackGroups(currentTracks)}"
-        )
-        if (audioGroups.isEmpty()) {
-            audioTrackReselectDoneForPlayback = true
-            Log.w(TAG, "No audio track group found after ready state")
-            return
-        }
-
-        val selectedAudioGroup = audioGroups.firstOrNull { group ->
-            (0 until group.length).any { index -> group.isTrackSelected(index) }
-        }
-
-        val candidate = audioGroups.firstNotNullOfOrNull { group ->
-            val selectedIndex = (0 until group.length).firstOrNull { idx -> group.isTrackSelected(idx) }
-            val fallbackIndex = (0 until group.length).firstOrNull { idx ->
-                !group.isTrackSelected(idx) && group.isTrackSupported(idx)
-            } ?: return@firstNotNullOfOrNull null
-
-            if (selectedAudioGroup != null && selectedAudioGroup.mediaTrackGroup == group.mediaTrackGroup && selectedIndex != null) {
-                val selectedFormat = group.getTrackFormat(selectedIndex)
-                val fallbackFormat = group.getTrackFormat(fallbackIndex)
-                Log.w(
-                    TAG,
-                    "Audio fallback switch channel=${currentChannel?.name}, index=$currentStreamIndex, selected=${describeFormat(selectedFormat)}, fallback=${describeFormat(fallbackFormat)}"
-                )
-            }
-
-            group to fallbackIndex
-        }
-
-        if (candidate == null) {
-            audioTrackReselectDoneForPlayback = true
-            Log.d(TAG, "No supported alternative audio track found")
-            return
-        }
-
-        val (group, trackIndex) = candidate
-        val targetFormat = group.getTrackFormat(trackIndex)
-        Log.i(
-            TAG,
-            "Apply audio override channel=${currentChannel?.name}, index=$currentStreamIndex, targetTrack=$trackIndex, target=${describeFormat(targetFormat)}"
-        )
-        val override = TrackSelectionOverride(group.mediaTrackGroup, listOf(trackIndex))
-        trackSelector.setParameters(
-            trackSelector
-                .buildUponParameters()
-                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                .setOverrideForType(override)
-        )
-
-        audioTrackReselectDoneForPlayback = true
-        player.seekTo(player.currentPosition)
-    }
-
-    private fun resetAudioTrackReselectState() {
-        audioTrackReselectDoneForPlayback = false
-        audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
-        audioTrackReselectRunnable = null
-        trackSelector.setParameters(
-            trackSelector
-                .buildUponParameters()
-                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-        )
-        Log.d(TAG, "Reset audio track fallback state and cleared audio overrides")
-    }
-
-    private fun describeTrackGroups(tracks: Tracks): String {
-        return tracks.groups.joinToString(separator = " || ") { group ->
-            val typeName = when (group.type) {
-                C.TRACK_TYPE_AUDIO -> "audio"
-                C.TRACK_TYPE_VIDEO -> "video"
-                C.TRACK_TYPE_TEXT -> "text"
-                C.TRACK_TYPE_METADATA -> "metadata"
-                else -> group.type.toString()
-            }
-            val details = (0 until group.length).joinToString(separator = ";") { idx ->
-                val format = group.getTrackFormat(idx)
-                "#${idx}{selected=${group.isTrackSelected(idx)},supported=${group.isTrackSupported(idx)},${describeFormat(format)}}"
-            }
-            "$typeName[$details]"
-        }
-    }
-
-    private fun describeFormat(format: Format?): String {
-        if (format == null) return "null"
-        return "id=${format.id},mime=${format.sampleMimeType},lang=${format.language},channels=${format.channelCount},rate=${format.sampleRate},bitrate=${format.bitrate},label=${format.label},codecs=${format.codecs}"
-    }
-
-    private fun shouldSwitchForUnsupportedAudio(tracks: Tracks, channel: Channel, streamIndex: Int): Boolean {
-        val channelKey = buildChannelKey(channel)
-        if (unsupportedAudioSwitchChannelKey != channelKey) {
-            unsupportedAudioSwitchChannelKey = channelKey
-            unsupportedAudioSwitchedIndices.clear()
-        }
-
-        if (unsupportedAudioSwitchedIndices.contains(streamIndex)) {
-            Log.d(
-                TAG,
-                "Skip unsupported-audio switch: already switched once channel=${channel.name}, index=$streamIndex"
-            )
-            return false
-        }
-
-        val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
-        if (audioGroups.isEmpty()) {
-            return false
-        }
-
-        val hasAudioTracks = audioGroups.any { it.length > 0 }
-        if (!hasAudioTracks) {
-            Log.d(TAG, "Skip unsupported-audio switch: audio groups are not ready yet")
-            return false
-        }
-
-        val hasSupportedAudio = audioGroups.any { group ->
-            (0 until group.length).any { idx -> group.isTrackSupported(idx) }
-        }
-        if (hasSupportedAudio) {
-            return false
-        }
-
-        Log.w(
-            TAG,
-            "All audio tracks unsupported channel=${channel.name}, index=$streamIndex, groups=${describeTrackGroups(tracks)}"
-        )
-        return true
-    }
-
-    private fun markUnsupportedAudioSwitched(channelKey: String, streamIndex: Int) {
-        if (unsupportedAudioSwitchChannelKey != channelKey) {
-            unsupportedAudioSwitchChannelKey = channelKey
-            unsupportedAudioSwitchedIndices.clear()
-        }
-        unsupportedAudioSwitchedIndices.add(streamIndex)
-    }
-
-    private fun resetUnsupportedAudioSwitchState() {
-        unsupportedAudioSwitchChannelKey = null
-        unsupportedAudioSwitchedIndices.clear()
     }
 
     private fun checkUpdateSilently() {
@@ -1374,7 +789,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     private fun dismissUpdateDialog(dialog: Dialog, onDismissed: (() -> Unit)? = null) {
         if (updateDialogAnimatedDismiss) return
         val decorView = dialog.window?.decorView
@@ -1402,7 +816,6 @@ class MainActivity : AppCompatActivity() {
             }
             .start()
     }
-
 
     private fun downloadAndInstallUpdate(updateInfo: UpdateInfo) {
         lifecycleScope.launch {
@@ -1531,11 +944,9 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         playbackFailureDialog?.dismiss()
         updateDialog?.dismiss()
-        audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
-        audioTrackReselectRunnable = null
-        stopPlaybackStallMonitor("on_destroy")
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
         binding.channelOverlay.animate().cancel()
+        playbackController.release()
         player.removeListener(playerListener)
         player.release()
         super.onDestroy()
