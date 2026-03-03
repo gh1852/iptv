@@ -117,8 +117,7 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             if (player.playbackState != Player.STATE_READY) {
-                Log.d(TAG, "Skip audio fallback: player not ready state=${player.playbackState}")
-                return
+                Log.d(TAG, "Player not ready yet, continue unsupported-audio detection state=${player.playbackState}")
             }
 
             val channel = currentChannel
@@ -137,6 +136,11 @@ class MainActivity : AppCompatActivity() {
                     isSwitchingStream = false
                     showPlaybackFailureDialog(channel)
                 }
+                return
+            }
+
+            if (player.playbackState != Player.STATE_READY) {
+                Log.d(TAG, "Skip audio fallback: player not ready state=${player.playbackState}")
                 return
             }
 
