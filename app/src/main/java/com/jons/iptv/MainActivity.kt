@@ -445,7 +445,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         Log.w(
                             TAG,
-                            "Load retry decision errorCount=${loadErrorInfo.errorCount}, dataType=${loadErrorInfo.dataType}, exception=${exception.javaClass.simpleName}, delayMs=$delayMs"
+                            "Load retry decision errorCount=${loadErrorInfo.errorCount}, exception=${exception.javaClass.simpleName}, delayMs=$delayMs"
                         )
                         return delayMs
                     }
