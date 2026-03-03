@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.jons.iptv"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.jons.iptv"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 6
         versionName = "1.0.5"
 
