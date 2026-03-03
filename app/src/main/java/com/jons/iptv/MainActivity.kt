@@ -122,12 +122,13 @@ class MainActivity : AppCompatActivity() {
 
             val channel = currentChannel
             if (channel != null && shouldSwitchForUnsupportedAudio(tracks, channel, currentStreamIndex)) {
+                val unsupportedIndex = currentStreamIndex
                 Log.w(
                     TAG,
-                    "Detected unsupported audio for current stream. Try next source channel=${channel.name}, index=$currentStreamIndex"
+                    "Detected unsupported audio for current stream. Try next source channel=${channel.name}, index=$unsupportedIndex"
                 )
-                if (tryPlayFrom(channel, currentStreamIndex + 1)) {
-                    markUnsupportedAudioSwitched(buildChannelKey(channel), currentStreamIndex)
+                if (tryPlayFrom(channel, unsupportedIndex + 1)) {
+                    markUnsupportedAudioSwitched(buildChannelKey(channel), unsupportedIndex)
                     if (!isSwitchingStream) {
                         isSwitchingStream = true
                         Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
