@@ -1039,6 +1039,12 @@ class MainActivity : AppCompatActivity() {
             return false
         }
 
+        val hasAudioTracks = audioGroups.any { it.length > 0 }
+        if (!hasAudioTracks) {
+            Log.d(TAG, "Skip unsupported-audio switch: audio groups are not ready yet")
+            return false
+        }
+
         val hasSupportedAudio = audioGroups.any { group ->
             (0 until group.length).any { idx -> group.isTrackSupported(idx) }
         }
