@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         private const val AUDIO_TRACK_RESELECT_DELAY_MS = 650L
         private const val PLAYBACK_STALL_DETECT_WINDOW_MS = 1_500L
         private const val PLAYBACK_STALL_POSITION_DELTA_MS = 120L
+        private const val PLAYBACK_STALL_CHECK_INTERVAL_MS = 500L
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -116,6 +117,7 @@ class MainActivity : AppCompatActivity() {
     private var audioTrackReselectRunnable: Runnable? = null
     private var playbackStallWindowStartMs: Long = 0L
     private var playbackStallStartPositionMs: Long = 0L
+    private var playbackStallCheckRunnable: Runnable? = null
 
     private val playerListener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
@@ -183,9 +185,9 @@ class MainActivity : AppCompatActivity() {
 
             when (playbackState) {
                 Player.STATE_BUFFERING,
-                Player.STATE_READY -> maybeHandlePlaybackStall()
+                Player.STATE_READY -> startPlaybackStallMonitor()
                 Player.STATE_IDLE,
-                Player.STATE_ENDED -> resetPlaybackStallWindow("state=$playbackState")
+                Player.STATE_ENDED -> stopPlaybackStallMonitor("state=$playbackState")
             }
         }
 
@@ -255,6 +257,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun startPlaybackStallMonitor() {
+        if (playbackStallCheckRunnable != null) {
+            return
+        }
+        playbackStallCheckRunnable = Runnable {
+            if (isFinishing || isDestroyed) {
+                stopPlaybackStallMonitor("activity_destroying")
+                return@Runnable
+            }
+            if (playbackStallCheckRunnable == null) {
+                return@Runnable
+            }
+            maybeHandlePlaybackStall()
+            val runnable = playbackStallCheckRunnable ?: return@Runnable
+            binding.playerView.postDelayed(runnable, PLAYBACK_STALL_CHECK_INTERVAL_MS)
+        }
+        val runnable = playbackStallCheckRunnable ?: return
+        binding.playerView.postDelayed(runnable, PLAYBACK_STALL_CHECK_INTERVAL_MS)
+    }
+
+    private fun stopPlaybackStallMonitor(reason: String) {
+        playbackStallCheckRunnable?.let { binding.playerView.removeCallbacks(it) }
+        playbackStallCheckRunnable = null
+        resetPlaybackStallWindow(reason)
+    }
+
     private fun maybeHandlePlaybackStall() {
         val channel = currentChannel ?: return
         if (isSwitchingStream || !player.playWhenReady) {
@@ -286,7 +314,7 @@ class MainActivity : AppCompatActivity() {
                 TAG,
                 "Playback stall detected but short-window limit reached channel=${channel.name}, index=$currentStreamIndex"
             )
-            resetPlaybackStallWindow("switch_limit")
+            stopPlaybackStallMonitor("switch_limit")
             return
         }
 
@@ -299,13 +327,13 @@ class MainActivity : AppCompatActivity() {
             recordAutoSwitch(buildChannelKey(channel))
             isSwitchingStream = true
             Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
-            resetPlaybackStallWindow("switched")
+            stopPlaybackStallMonitor("switched")
             return
         }
 
         isSwitchingStream = false
         showPlaybackFailureDialog(channel)
-        resetPlaybackStallWindow("switch_failed")
+        stopPlaybackStallMonitor("switch_failed")
     }
 
     private fun resetPlaybackStallWindow(reason: String) {
@@ -617,6 +645,7 @@ class MainActivity : AppCompatActivity() {
         resetRetryState()
         resetForcedHlsRetryState()
         resetUnsupportedAudioSwitchState()
+        stopPlaybackStallMonitor("play_channel")
         resetSwitchWindow(channel)
         if (!tryPlayFrom(channel, streamIndex)) {
             showPlaybackFailureDialog(channel)
@@ -912,6 +941,7 @@ class MainActivity : AppCompatActivity() {
 
         runCatching {
             resetAudioTrackReselectState()
+            stopPlaybackStallMonitor("retry_current_stream")
             val mediaItem = buildMediaItem(streamUrl, forceHls = forceHls)
             player.setMediaItem(mediaItem)
             player.prepare()
@@ -1434,6 +1464,7 @@ class MainActivity : AppCompatActivity() {
         updateDialog?.dismiss()
         audioTrackReselectRunnable?.let { binding.playerView.removeCallbacks(it) }
         audioTrackReselectRunnable = null
+        stopPlaybackStallMonitor("on_destroy")
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
         binding.channelOverlay.animate().cancel()
         player.removeListener(playerListener)
