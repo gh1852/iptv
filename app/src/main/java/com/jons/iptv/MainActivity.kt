@@ -94,6 +94,8 @@ class MainActivity : AppCompatActivity() {
     private var retriedStreamIndex: Int = -1
     private var forcedHlsRetryChannelKey: String? = null
     private var forcedHlsRetryStreamIndex: Int = -1
+    private var unsupportedAudioSwitchChannelKey: String? = null
+    private var unsupportedAudioSwitchStreamIndex: Int = -1
     private var switchWindowChannelKey: String? = null
     private val switchTimestampsMs = ArrayDeque<Long>()
     private var lastBackPressedAtMs: Long = 0L
@@ -118,6 +120,26 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Skip audio fallback: player not ready state=${player.playbackState}")
                 return
             }
+
+            val channel = currentChannel
+            if (channel != null && shouldSwitchForUnsupportedAudio(tracks, channel, currentStreamIndex)) {
+                Log.w(
+                    TAG,
+                    "Detected unsupported audio for current stream. Try next source channel=${channel.name}, index=$currentStreamIndex"
+                )
+                if (tryPlayFrom(channel, currentStreamIndex + 1)) {
+                    markUnsupportedAudioSwitched(buildChannelKey(channel), currentStreamIndex)
+                    if (!isSwitchingStream) {
+                        isSwitchingStream = true
+                        Toast.makeText(this@MainActivity, getString(R.string.switching_stream), Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    isSwitchingStream = false
+                    showPlaybackFailureDialog(channel)
+                }
+                return
+            }
+
             if (tracks.groups.none { it.type == C.TRACK_TYPE_AUDIO && it.length > 1 }) {
                 Log.d(TAG, "Skip audio fallback: no audio group with multiple tracks")
                 return
@@ -131,6 +153,7 @@ class MainActivity : AppCompatActivity() {
                 binding.playerView.postDelayed(it, AUDIO_TRACK_RESELECT_DELAY_MS)
             }
         }
+
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             Log.i(
@@ -469,6 +492,7 @@ class MainActivity : AppCompatActivity() {
         isSwitchingStream = false
         resetRetryState()
         resetForcedHlsRetryState()
+        resetUnsupportedAudioSwitchState()
         resetSwitchWindow(channel)
         if (!tryPlayFrom(channel, streamIndex)) {
             showPlaybackFailureDialog(channel)
@@ -988,6 +1012,45 @@ class MainActivity : AppCompatActivity() {
     private fun describeFormat(format: Format?): String {
         if (format == null) return "null"
         return "id=${format.id},mime=${format.sampleMimeType},lang=${format.language},channels=${format.channelCount},rate=${format.sampleRate},bitrate=${format.bitrate},label=${format.label},codecs=${format.codecs}"
+    }
+
+    private fun shouldSwitchForUnsupportedAudio(tracks: Tracks, channel: Channel, streamIndex: Int): Boolean {
+        val channelKey = buildChannelKey(channel)
+        if (unsupportedAudioSwitchChannelKey == channelKey && unsupportedAudioSwitchStreamIndex == streamIndex) {
+            Log.d(
+                TAG,
+                "Skip unsupported-audio switch: already switched once channel=${channel.name}, index=$streamIndex"
+            )
+            return false
+        }
+
+        val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        if (audioGroups.isEmpty()) {
+            return false
+        }
+
+        val hasSupportedAudio = audioGroups.any { group ->
+            (0 until group.length).any { idx -> group.isTrackSupported(idx) }
+        }
+        if (hasSupportedAudio) {
+            return false
+        }
+
+        Log.w(
+            TAG,
+            "All audio tracks unsupported channel=${channel.name}, index=$streamIndex, groups=${describeTrackGroups(tracks)}"
+        )
+        return true
+    }
+
+    private fun markUnsupportedAudioSwitched(channelKey: String, streamIndex: Int) {
+        unsupportedAudioSwitchChannelKey = channelKey
+        unsupportedAudioSwitchStreamIndex = streamIndex
+    }
+
+    private fun resetUnsupportedAudioSwitchState() {
+        unsupportedAudioSwitchChannelKey = null
+        unsupportedAudioSwitchStreamIndex = -1
     }
 
     private fun checkUpdateSilently() {
