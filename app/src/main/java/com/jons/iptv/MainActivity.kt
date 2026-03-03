@@ -95,7 +95,7 @@ class MainActivity : AppCompatActivity() {
     private var forcedHlsRetryChannelKey: String? = null
     private var forcedHlsRetryStreamIndex: Int = -1
     private var unsupportedAudioSwitchChannelKey: String? = null
-    private var unsupportedAudioSwitchStreamIndex: Int = -1
+    private val unsupportedAudioSwitchedIndices = mutableSetOf<Int>()
     private var switchWindowChannelKey: String? = null
     private val switchTimestampsMs = ArrayDeque<Long>()
     private var lastBackPressedAtMs: Long = 0L
@@ -1021,7 +1021,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun shouldSwitchForUnsupportedAudio(tracks: Tracks, channel: Channel, streamIndex: Int): Boolean {
         val channelKey = buildChannelKey(channel)
-        if (unsupportedAudioSwitchChannelKey == channelKey && unsupportedAudioSwitchStreamIndex == streamIndex) {
+        if (unsupportedAudioSwitchChannelKey != channelKey) {
+            unsupportedAudioSwitchChannelKey = channelKey
+            unsupportedAudioSwitchedIndices.clear()
+        }
+
+        if (unsupportedAudioSwitchedIndices.contains(streamIndex)) {
             Log.d(
                 TAG,
                 "Skip unsupported-audio switch: already switched once channel=${channel.name}, index=$streamIndex"
@@ -1049,13 +1054,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun markUnsupportedAudioSwitched(channelKey: String, streamIndex: Int) {
-        unsupportedAudioSwitchChannelKey = channelKey
-        unsupportedAudioSwitchStreamIndex = streamIndex
+        if (unsupportedAudioSwitchChannelKey != channelKey) {
+            unsupportedAudioSwitchChannelKey = channelKey
+            unsupportedAudioSwitchedIndices.clear()
+        }
+        unsupportedAudioSwitchedIndices.add(streamIndex)
     }
 
     private fun resetUnsupportedAudioSwitchState() {
         unsupportedAudioSwitchChannelKey = null
-        unsupportedAudioSwitchStreamIndex = -1
+        unsupportedAudioSwitchedIndices.clear()
     }
 
     private fun checkUpdateSilently() {
