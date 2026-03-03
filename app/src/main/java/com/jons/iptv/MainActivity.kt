@@ -18,7 +18,6 @@ import com.jons.iptv.data.Channel
 import com.jons.iptv.data.ChannelRepository
 import com.jons.iptv.databinding.ActivityMainBinding
 import com.jons.iptv.input.MainKeyEventRouter
-import com.jons.iptv.playback.MediaItemFactory
 import com.jons.iptv.playback.PlayerEngineCoordinator
 import com.jons.iptv.ui.GroupedChannelAdapter
 import com.jons.iptv.ui.dialog.PlaybackFailureDialogCoordinator
@@ -42,8 +41,6 @@ class MainActivity : AppCompatActivity() {
         onChannelSelected(channel)
     }
 
-    private val mediaItemFactory = MediaItemFactory(TAG)
-
     private lateinit var playbackFailureDialogCoordinator: PlaybackFailureDialogCoordinator
     private lateinit var appUpdateCoordinator: AppUpdateCoordinator
     private lateinit var menuFocusCoordinator: MenuFocusCoordinator
@@ -64,7 +61,6 @@ class MainActivity : AppCompatActivity() {
             activity = this,
             binding = binding,
             groupedChannelAdapter = groupedChannelAdapter,
-            mediaItemFactory = mediaItemFactory,
             onShowPlaybackFailureDialog = { channel -> showPlaybackFailureDialog(channel) },
             onDismissPlaybackFailureDialog = { dismissPlaybackFailureDialogIfShowing() },
             logTag = TAG
@@ -233,9 +229,6 @@ class MainActivity : AppCompatActivity() {
         playbackFailureDialogCoordinator.dismissIfShowing()
     }
 
-    private fun buildMediaItem(url: String) = mediaItemFactory.buildMediaItem(url)
-
-    private fun inferMimeType(url: String) = mediaItemFactory.inferMimeType(url)
 
     private fun checkUpdateSilently() {
         appUpdateCoordinator.checkUpdateSilently()

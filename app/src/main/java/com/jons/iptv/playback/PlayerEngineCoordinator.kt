@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultDataSource
@@ -30,7 +31,6 @@ class PlayerEngineCoordinator(
     private val activity: AppCompatActivity,
     private val binding: ActivityMainBinding,
     private val groupedChannelAdapter: GroupedChannelAdapter,
-    private val mediaItemFactory: MediaItemFactory,
     private val onShowPlaybackFailureDialog: (Channel) -> Unit,
     private val onDismissPlaybackFailureDialog: () -> Unit,
     private val logTag: String
@@ -198,8 +198,12 @@ class PlayerEngineCoordinator(
 
     private fun initPlaybackController() {
         val logger = PlaybackLogger(logTag)
-        val adapter = ExoPlayerAdapter(player) { url -> mediaItemFactory.buildMediaItem(url) }
-
+        val adapter = ExoPlayerAdapter(player) { url ->
+            Log.d(logTag, "Build media item url=$url")
+            MediaItem.Builder()
+                .setUri(url)
+                .build()
+        }
         playbackController = PlaybackController(
             store = playbackStore,
             playerAdapter = adapter,
