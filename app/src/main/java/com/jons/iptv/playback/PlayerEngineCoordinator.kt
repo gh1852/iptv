@@ -194,9 +194,7 @@ class PlayerEngineCoordinator(
             )
             .build()
 
-        trackSelector = DefaultTrackSelector(activity).apply {
-            setParameters(buildUponParameters())
-        }
+        trackSelector = DefaultTrackSelector(activity)
 
         val renderersFactory = DefaultRenderersFactory(activity)
             .setEnableDecoderFallback(true)
