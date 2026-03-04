@@ -219,7 +219,6 @@ class PlayerEngineCoordinator(
                         .build(),
                     true
                 )
-                it.setHandleAudioBecomingNoisy(true)
                 it.addListener(playerListener)
                 binding.playerView.player = it
             }
