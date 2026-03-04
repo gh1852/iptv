@@ -144,3 +144,34 @@ sealed interface PlaybackState {
 1. Playlist fetch timeout should remain bounded.
 2. Failure at network/parser/player boundaries must not crash app.
 3. UI interactions (group toggle/channel click) should remain responsive during playback changes.
+
+---
+
+## 9) Playback Retry Policy Guardrail
+
+### Pattern: Prefer minimal load-error policy customization
+
+**Problem**: Over-customizing `LoadErrorHandlingPolicy` can create side effects without improving failover, because this feature already has explicit switch-source fallback in `PlaybackController`.
+
+**Rule**:
+
+- Keep `DefaultLoadErrorHandlingPolicy(0)` to disable internal repeated retries for a source.
+- Do not override `getMinimumLoadableRetryCount()` when the constructor already sets the same value.
+- Only add custom `getRetryDelayMsFor()` when there is measured evidence that delay tuning improves success rate.
+
+**Good**:
+
+```kotlin
+.setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(0))
+```
+
+**Avoid**:
+
+```kotlin
+object : DefaultLoadErrorHandlingPolicy(0) {
+    override fun getMinimumLoadableRetryCount(dataType: Int): Int = 0
+    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long = ...
+}
+```
+
+**Why**: This keeps behavior aligned with existing failover state machine (`player error` / `first-frame timeout` => switch source), reduces redundant logic, and lowers maintenance risk.
