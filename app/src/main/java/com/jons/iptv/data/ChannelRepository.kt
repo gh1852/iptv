@@ -64,13 +64,8 @@ class ChannelRepository(
 
         val deferred = synchronized(preloadLock) { preloadDeferred }
         if (deferred != null) {
-            val preloaded = deferred.await()
-                .onSuccess { channels ->
-                    if (channels.isNotEmpty()) {
-                        cachedChannels = channels
-                    }
-                }
-                .getOrNull()
+            val preloadResult = deferred.await()
+            val preloaded = preloadResult.getOrNull()
 
             synchronized(preloadLock) {
                 if (preloadDeferred === deferred) {
@@ -79,7 +74,12 @@ class ChannelRepository(
             }
 
             if (!preloaded.isNullOrEmpty()) {
+                cachedChannels = preloaded
                 return preloaded
+            }
+
+            preloadResult.exceptionOrNull()?.let { error ->
+                throw IllegalStateException("Preload fetch failed", error)
             }
         }
 
@@ -89,6 +89,7 @@ class ChannelRepository(
             }
         }
     }
+
 
     suspend fun fetchChannels(): List<Channel> = withContext(Dispatchers.IO) {
         var lastError: Throwable? = null

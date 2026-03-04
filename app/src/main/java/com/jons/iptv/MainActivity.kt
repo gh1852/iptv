@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var menuFocusCoordinator: MenuFocusCoordinator
     private lateinit var playerEngineCoordinator: PlayerEngineCoordinator
     private lateinit var keyEventRouter: MainKeyEventRouter
+    private var hasDeferredUpdateCheck = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashStartTime = SystemClock.uptimeMillis()
@@ -108,7 +109,6 @@ class MainActivity : AppCompatActivity() {
         initList()
         initMenuInteractions()
         loadChannels()
-        checkUpdateSilently()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -191,11 +191,10 @@ class MainActivity : AppCompatActivity() {
             runCatching { repository.getChannels() }
                 .onSuccess { channels ->
                     val groupedChannels = buildGroupedChannels(channels)
-                    groupedChannelAdapter.submitGroups(groupedChannels)
-
                     val initialChannel = resolveInitialChannel(groupedChannels)
+                    groupedChannelAdapter.submitGroups(groupedChannels, initialChannel?.category)
+
                     if (initialChannel != null) {
-                        groupedChannelAdapter.setExpandedGroup(initialChannel.category)
                         playChannel(initialChannel, 0)
                         showMenu()
                         binding.menuContainer.postDelayed({
@@ -206,6 +205,8 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         showMenu()
                     }
+
+                    triggerUpdateCheckAfterFirstRender()
                 }
                 .onFailure {
                     Toast.makeText(this@MainActivity, getString(R.string.load_failed), Toast.LENGTH_LONG).show()
@@ -275,6 +276,14 @@ class MainActivity : AppCompatActivity() {
         playbackFailureDialogCoordinator.dismissIfShowing()
     }
 
+
+    private fun triggerUpdateCheckAfterFirstRender() {
+        if (hasDeferredUpdateCheck) return
+        hasDeferredUpdateCheck = true
+        lifecycleScope.launch {
+            checkUpdateSilently()
+        }
+    }
 
     private fun checkUpdateSilently() {
         appUpdateCoordinator.checkUpdateSilently()

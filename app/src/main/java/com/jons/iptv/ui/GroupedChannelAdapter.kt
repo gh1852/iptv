@@ -82,12 +82,19 @@ class GroupedChannelAdapter(
 
     override fun getItemCount(): Int = rows.size
 
-    fun submitGroups(newGroups: List<CategoryChannels>) {
+    fun submitGroups(newGroups: List<CategoryChannels>, expandedCategory: String? = null) {
         groups.clear()
         groups.addAll(newGroups)
 
         val categories = newGroups.map { it.category }.toSet()
         expandedGroups.retainAll(categories)
+
+        if (expandedCategory != null) {
+            expandedGroups.clear()
+            if (categories.contains(expandedCategory)) {
+                expandedGroups.add(expandedCategory)
+            }
+        }
 
         rebuildRows()
         notifyDataSetChanged()
