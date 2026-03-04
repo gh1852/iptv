@@ -20,7 +20,6 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import coil.load
 import com.jons.iptv.R
@@ -48,7 +47,6 @@ class PlayerEngineCoordinator(
     }
 
     private lateinit var player: ExoPlayer
-    private lateinit var trackSelector: DefaultTrackSelector
 
     private var currentChannel: Channel? = null
     private var previousChannel: Channel? = null
@@ -194,8 +192,6 @@ class PlayerEngineCoordinator(
             )
             .build()
 
-        trackSelector = DefaultTrackSelector(activity)
-
         val renderersFactory = DefaultRenderersFactory(activity)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
@@ -213,7 +209,6 @@ class PlayerEngineCoordinator(
 
         player = ExoPlayer.Builder(activity, renderersFactory)
             .setLoadControl(loadControl)
-            .setTrackSelector(trackSelector)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .also {
