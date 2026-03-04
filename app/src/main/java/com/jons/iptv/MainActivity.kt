@@ -34,7 +34,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
-        private const val MIN_SPLASH_DURATION_MS = 800L
+        private const val MIN_SPLASH_DURATION_MS = 2000L
         private const val PREF_LAST_CHANNEL = "last_channel_store"
         private const val KEY_LAST_CHANNEL_CATEGORY = "last_channel_category"
         private const val KEY_LAST_CHANNEL_NAME = "last_channel_name"
