@@ -204,7 +204,6 @@ class PlayerEngineCoordinator(
                         TRACK_MAX_VIDEO_SIZE_SD_WIDTH,
                         TRACK_MAX_VIDEO_SIZE_SD_HEIGHT
                     )
-                    .setForceHighestSupportedBitrate(false)
             )
         }
 
