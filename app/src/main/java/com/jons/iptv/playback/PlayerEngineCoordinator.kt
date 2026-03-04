@@ -16,14 +16,12 @@ import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
-import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo
 import coil.load
 import com.jons.iptv.R
 import com.jons.iptv.data.Channel
@@ -48,8 +46,6 @@ class PlayerEngineCoordinator(
         private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
         private const val HTTP_READ_TIMEOUT_MS = 8_000
         private const val LOAD_ERROR_MIN_RETRY_COUNT = 0
-        private const val LOAD_ERROR_NETWORK_RETRY_DELAY_MS = 300L
-        private const val LOAD_ERROR_OTHER_RETRY_DELAY_MS = 600L
         private const val OVERLAY_AUTO_HIDE_DELAY_MS = 3_000L
         private const val MEDIA3_VERSION = "1.6.0"
     }
@@ -225,27 +221,7 @@ class PlayerEngineCoordinator(
         val dataSourceFactory = DefaultDataSource.Factory(activity, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
             .setLiveTargetOffsetMs(3_000)
-            .setLoadErrorHandlingPolicy(
-                object : DefaultLoadErrorHandlingPolicy(LOAD_ERROR_MIN_RETRY_COUNT) {
-                    override fun getMinimumLoadableRetryCount(dataType: Int): Int {
-                        return LOAD_ERROR_MIN_RETRY_COUNT
-                    }
-
-                    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long {
-                        val exception = loadErrorInfo.exception
-                        val delayMs = when (exception) {
-                            is HttpDataSource.HttpDataSourceException,
-                            is HttpDataSource.InvalidResponseCodeException -> LOAD_ERROR_NETWORK_RETRY_DELAY_MS
-                            else -> LOAD_ERROR_OTHER_RETRY_DELAY_MS
-                        }
-                        Log.w(
-                            logTag,
-                            "Load retry decision errorCount=${loadErrorInfo.errorCount}, exception=${exception.javaClass.simpleName}, delayMs=$delayMs"
-                        )
-                        return delayMs
-                    }
-                }
-            )
+            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(LOAD_ERROR_MIN_RETRY_COUNT))
 
         player = ExoPlayer.Builder(activity, renderersFactory)
             .setLoadControl(loadControl)
