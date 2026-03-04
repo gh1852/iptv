@@ -13,8 +13,7 @@
         <item name="windowSplashScreenBackground">@android:color/black</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_app_logo_round</item>
         <item name="postSplashScreenTheme">@style/Theme.IPTV</item>
-        <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowBackground">@drawable/bg_splash</item>
     </style>
 
     <style name="ThemeOverlay.IPTV.PlaybackFailureDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
