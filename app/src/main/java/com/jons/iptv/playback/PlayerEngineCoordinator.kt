@@ -45,7 +45,6 @@ class PlayerEngineCoordinator(
         private const val TRACK_MAX_VIDEO_SIZE_SD_HEIGHT = 720
         private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
         private const val HTTP_READ_TIMEOUT_MS = 8_000
-        private const val LOAD_ERROR_MIN_RETRY_COUNT = 0
         private const val OVERLAY_AUTO_HIDE_DELAY_MS = 3_000L
         private const val MEDIA3_VERSION = "1.6.0"
     }
@@ -220,7 +219,7 @@ class PlayerEngineCoordinator(
         val dataSourceFactory = DefaultDataSource.Factory(activity, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
             .setLiveTargetOffsetMs(3_000)
-            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(LOAD_ERROR_MIN_RETRY_COUNT))
+            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(0))
 
         player = ExoPlayer.Builder(activity, renderersFactory)
             .setLoadControl(loadControl)
