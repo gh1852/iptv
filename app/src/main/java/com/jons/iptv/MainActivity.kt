@@ -234,9 +234,20 @@ class MainActivity : AppCompatActivity() {
         appUpdateCoordinator.checkUpdateSilently()
     }
 
+    override fun onStart() {
+        super.onStart()
+        playerEngineCoordinator.onStart()
+    }
+
     override fun onPause() {
+        playerEngineCoordinator.onPause()
         keyEventRouter.resetBackPressWindow()
         super.onPause()
+    }
+
+    override fun onStop() {
+        playerEngineCoordinator.onStop()
+        super.onStop()
     }
 
     override fun onDestroy() {

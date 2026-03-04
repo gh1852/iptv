@@ -3,6 +3,7 @@ package com.jons.iptv.playback
 import android.os.Build
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
@@ -63,6 +64,8 @@ class PlayerEngineCoordinator(
     private var overlayHideRunnable: Runnable? = null
     private var isSwitchingStream: Boolean = false
     private var decoderRecoveryRequired: Boolean = false
+    private var resumePlaybackOnForeground: Boolean = false
+    private var isPlayerInitialized: Boolean = false
 
     private val playbackStore = PlaybackStore()
     private lateinit var playbackController: PlaybackController
@@ -74,6 +77,10 @@ class PlayerEngineCoordinator(
                 "Playback state changed state=$playbackState, playWhenReady=${player.playWhenReady}, isPlaying=${player.isPlaying}, channel=${currentChannel?.name}, index=$currentStreamIndex, position=${player.currentPosition}"
             )
             playbackController.onPlaybackStateChanged(playbackState)
+            when (playbackState) {
+                Player.STATE_READY -> applyKeepScreenOnState(player.playWhenReady)
+                Player.STATE_ENDED, Player.STATE_IDLE -> clearKeepScreenOnFlag()
+            }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -117,6 +124,7 @@ class PlayerEngineCoordinator(
     fun initPlayerEngine() {
         initPlayer()
         initPlaybackController()
+        isPlayerInitialized = true
     }
 
     fun getCurrentChannel(): Channel? = currentChannel
@@ -139,12 +147,48 @@ class PlayerEngineCoordinator(
         previousChannel?.let { playChannel(it, 0) }
     }
 
+    fun onStart() {
+        if (!isPlayerInitialized) {
+            initPlayerEngine()
+            currentChannel?.let { channel ->
+                playbackController.play(channel, currentStreamIndex)
+                if (!resumePlaybackOnForeground) {
+                    player.playWhenReady = false
+                }
+            }
+        } else if (resumePlaybackOnForeground) {
+            player.playWhenReady = true
+        }
+        applyKeepScreenOnState(player.playWhenReady)
+    }
+
+    fun onPause() {
+        if (!isPlayerInitialized) {
+            return
+        }
+        resumePlaybackOnForeground = player.playWhenReady
+        clearKeepScreenOnFlag()
+        player.playWhenReady = false
+    }
+
+    fun onStop() {
+        if (!isPlayerInitialized) {
+            return
+        }
+        release()
+    }
+
     fun release() {
+        if (!isPlayerInitialized) {
+            return
+        }
+        clearKeepScreenOnFlag()
         overlayHideRunnable?.let { binding.channelOverlay.removeCallbacks(it) }
         binding.channelOverlay.animate().cancel()
         playbackController.release()
         player.removeListener(playerListener)
         player.release()
+        isPlayerInitialized = false
     }
 
     private fun initPlayer() {
@@ -238,6 +282,7 @@ class PlayerEngineCoordinator(
                 override fun onPrepareToPlay(channel: Channel, streamIndex: Int, streamUrl: String) {
                     currentChannel = channel
                     currentStreamIndex = streamIndex
+                    applyKeepScreenOnState(true)
                 }
 
                 override fun onSwitchingSource(
@@ -299,6 +344,20 @@ class PlayerEngineCoordinator(
 
     private fun buildUserAgent(): String {
         return "com.android.chrome/131.0.6778.200 (Linux;Android ${Build.VERSION.RELEASE}) AndroidXMedia3/$MEDIA3_VERSION"
+    }
+
+    private fun applyKeepScreenOnState(keepScreenOn: Boolean) {
+        if (keepScreenOn) {
+            binding.playerView.keepScreenOn = true
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            return
+        }
+        clearKeepScreenOnFlag()
+    }
+
+    private fun clearKeepScreenOnFlag() {
+        binding.playerView.keepScreenOn = false
+        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun showOverlay(channel: Channel) {
