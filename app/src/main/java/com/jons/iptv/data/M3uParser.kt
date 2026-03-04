@@ -65,7 +65,6 @@ object M3uParser {
                     category = it.category,
                     logoUrl = it.logoUrl,
                     streamUrls = it.streamUrls
-                        .sortedByDescending(::streamPriority)
                 )
             }
 
@@ -134,23 +133,6 @@ object M3uParser {
         val logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() }
 
         return ExtInfMeta(name = name, category = group, logoUrl = logo)
-    }
-
-    private fun streamPriority(url: String): Int {
-        val normalized = url.lowercase()
-        var score = 0
-
-        if (normalized.startsWith("https://")) score += 4
-        if (normalized.startsWith("http://")) score += 2
-
-        if (normalized.contains(".m3u8")) score += 5
-        if (normalized.contains(".mpd")) score += 4
-        if (normalized.contains(".ts") || normalized.contains(".mp4")) score += 2
-
-        if (normalized.contains("udp://") || normalized.contains("rtp://")) score -= 3
-        if (normalized.contains("localhost") || normalized.contains("127.0.0.1")) score -= 5
-
-        return score
     }
 
     private data class PlainEntry(
