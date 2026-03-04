@@ -9,6 +9,10 @@
         <item name="android:windowBackground">@drawable/bg_splash</item>
     </style>
 
+    <style name="Theme.IPTV.Launcher" parent="Theme.IPTV">
+        <item name="android:windowBackground">@drawable/bg_splash</item>
+    </style>
+
     <style name="ThemeOverlay.IPTV.PlaybackFailureDialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
         <item name="materialAlertDialogTitleTextStyle">@style/TextAppearance.IPTV.PlaybackDialog.Title</item>
         <item name="materialAlertDialogBodyTextStyle">@style/TextAppearance.IPTV.PlaybackDialog.Body</item>

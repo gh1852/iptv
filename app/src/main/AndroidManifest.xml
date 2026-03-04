@@ -19,6 +19,7 @@
         android:theme="@style/Theme.IPTV">
         <activity
             android:name=".MainActivity"
+            android:theme="@style/Theme.IPTV.Launcher"
             android:exported="true"
             android:screenOrientation="landscape">
             <intent-filter>
