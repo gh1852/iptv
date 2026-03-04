@@ -41,8 +41,6 @@ class PlayerEngineCoordinator(
         private const val LOAD_CONTROL_MAX_BUFFER_MS = 15_000
         private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_MS = 800
         private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_500
-        private const val TRACK_MAX_VIDEO_SIZE_SD_WIDTH = 1280
-        private const val TRACK_MAX_VIDEO_SIZE_SD_HEIGHT = 720
         private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
         private const val HTTP_READ_TIMEOUT_MS = 8_000
         private const val OVERLAY_AUTO_HIDE_DELAY_MS = 3_000L
@@ -197,13 +195,7 @@ class PlayerEngineCoordinator(
             .build()
 
         trackSelector = DefaultTrackSelector(activity).apply {
-            setParameters(
-                buildUponParameters()
-                    .setMaxVideoSize(
-                        TRACK_MAX_VIDEO_SIZE_SD_WIDTH,
-                        TRACK_MAX_VIDEO_SIZE_SD_HEIGHT
-                    )
-            )
+            setParameters(buildUponParameters())
         }
 
         val renderersFactory = DefaultRenderersFactory(activity)
