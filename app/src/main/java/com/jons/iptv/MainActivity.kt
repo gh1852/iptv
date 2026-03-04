@@ -4,12 +4,15 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.jons.iptv.data.AppUpdateRepository
@@ -31,6 +34,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
+        private const val MIN_SPLASH_DURATION_MS = 800L
         private const val PREF_LAST_CHANNEL = "last_channel_store"
         private const val KEY_LAST_CHANNEL_CATEGORY = "last_channel_category"
         private const val KEY_LAST_CHANNEL_NAME = "last_channel_name"
@@ -51,6 +55,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keyEventRouter: MainKeyEventRouter
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashStartTime = SystemClock.uptimeMillis()
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition {
+            SystemClock.uptimeMillis() - splashStartTime < MIN_SPLASH_DURATION_MS
+        }
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -141,7 +150,7 @@ class MainActivity : AppCompatActivity() {
 
         val appWindow = window
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            appWindow.setDecorFitsSystemWindows(false)
+            WindowCompat.setDecorFitsSystemWindows(appWindow, false)
             appWindow.insetsController?.let { controller ->
                 controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
                 controller.systemBarsBehavior =
