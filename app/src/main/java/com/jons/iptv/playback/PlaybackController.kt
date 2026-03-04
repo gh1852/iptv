@@ -147,7 +147,7 @@ class PlaybackController(
     }
 
     companion object {
-        private const val DEFAULT_FIRST_FRAME_TIMEOUT_MS = 10_000L
+        private const val DEFAULT_FIRST_FRAME_TIMEOUT_MS = 5_000L
         private const val DEFAULT_SWITCH_GAP_MS = 500L
     }
 }

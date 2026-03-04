@@ -170,6 +170,7 @@ class PlayerEngineCoordinator(
 
         val renderersFactory = DefaultRenderersFactory(activity)
             .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setConnectTimeoutMs(HTTP_CONNECT_TIMEOUT_MS)
