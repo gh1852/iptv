@@ -31,6 +31,9 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
+        private const val PREF_LAST_CHANNEL = "last_channel_store"
+        private const val KEY_LAST_CHANNEL_CATEGORY = "last_channel_category"
+        private const val KEY_LAST_CHANNEL_NAME = "last_channel_name"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -181,7 +184,7 @@ class MainActivity : AppCompatActivity() {
                     val groupedChannels = buildGroupedChannels(channels)
                     groupedChannelAdapter.submitGroups(groupedChannels)
 
-                    val initialChannel = groupedChannels.firstOrNull()?.channels?.firstOrNull()
+                    val initialChannel = resolveInitialChannel(groupedChannels)
                     if (initialChannel != null) {
                         groupedChannelAdapter.setExpandedGroup(initialChannel.category)
                         playChannel(initialChannel, 0)
@@ -217,9 +220,43 @@ class MainActivity : AppCompatActivity() {
         hideMenu(moveFocusToPlayer = true)
     }
 
+    private fun resolveInitialChannel(groupedChannels: List<CategoryChannels>): Channel? {
+        val fallback = groupedChannels.firstOrNull()?.channels?.firstOrNull()
+        val saved = loadLastChannelRef() ?: return fallback
+        val (savedCategory, savedName) = saved
+
+        return groupedChannels
+            .asSequence()
+            .flatMap { it.channels.asSequence() }
+            .firstOrNull { it.category == savedCategory && it.name == savedName }
+            ?: fallback
+    }
+
+    private fun saveLastChannel(channel: Channel) {
+        val category = channel.category.trim()
+        val name = channel.name.trim()
+        if (category.isEmpty() || name.isEmpty()) return
+
+        getSharedPreferences(PREF_LAST_CHANNEL, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_CHANNEL_CATEGORY, category)
+            .putString(KEY_LAST_CHANNEL_NAME, name)
+            .apply()
+    }
+
+    private fun loadLastChannelRef(): Pair<String, String>? {
+        val prefs = getSharedPreferences(PREF_LAST_CHANNEL, Context.MODE_PRIVATE)
+        val category = prefs.getString(KEY_LAST_CHANNEL_CATEGORY, null)?.trim().orEmpty()
+        val name = prefs.getString(KEY_LAST_CHANNEL_NAME, null)?.trim().orEmpty()
+        if (category.isEmpty() || name.isEmpty()) return null
+        return category to name
+    }
+
     private fun playChannel(channel: Channel, streamIndex: Int) {
+        saveLastChannel(channel)
         playerEngineCoordinator.playChannel(channel, streamIndex)
     }
+
 
     private fun showPlaybackFailureDialog(channel: Channel) {
         playbackFailureDialogCoordinator.showPlaybackFailureDialog(channel)
