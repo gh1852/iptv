@@ -6,46 +6,56 @@
 
 ## Overview
 
-<!--
-Document your project's logging conventions here.
+Logging uses Android `Log` APIs (`Log.d/i/w/e`) with explicit tags.
 
-Questions to answer:
-- What logging library do you use?
-- What are the log levels and when to use each?
-- What should be logged?
-- What should NOT be logged (PII, secrets)?
--->
-
-(To be filled by the team)
+There is a small wrapper class used in playback domain, while other modules may call `Log` directly.
 
 ---
 
 ## Log Levels
 
-<!-- When to use each level: debug, info, warn, error -->
+Observed usage:
 
-(To be filled by the team)
+- `Log.d`: diagnostic flow/state details
+  - `app/src/main/java/com/jons/iptv/playback/PlayerEngineCoordinator.kt:123`
+- `Log.i`: notable non-error runtime information
+  - `app/src/main/java/com/jons/iptv/playback/PlayerEngineCoordinator.kt:64`
+- `Log.w`: recoverable or expected failures
+  - `app/src/main/java/com/jons/iptv/update/AppUpdateCoordinator.kt:48`
+- `Log.e`: unrecoverable/critical failure with throwable
+  - `app/src/main/java/com/jons/iptv/playback/PlayerEngineCoordinator.kt:290`
 
 ---
 
 ## Structured Logging
 
-<!-- Log format, required fields -->
+Current pattern is message-based logging (plain text with contextual fields in message body).
 
-(To be filled by the team)
+- Playback logger wrapper: `app/src/main/java/com/jons/iptv/playback/PlaybackLogger.kt`
+- Main activity tag constant pattern: `app/src/main/java/com/jons/iptv/MainActivity.kt:34`
+
+Recommended consistency based on existing code:
+
+- Include runtime context in message (`channel`, `index`, `reason`, URL/phase)
+- Always pass throwable for `Log.e` and warning paths that include exceptions
 
 ---
 
 ## What to Log
 
-<!-- Important events to log -->
+- Playback state transitions and recovery reasons
+- Data loading failures and update flow failures
+- Decoder/player recreation outcomes
 
-(To be filled by the team)
+Examples:
+
+- Decoder recovery warning: `app/src/main/java/com/jons/iptv/playback/PlayerEngineCoordinator.kt:282`
+- Update flow warning: `app/src/main/java/com/jons/iptv/update/AppUpdateCoordinator.kt:142`
 
 ---
 
 ## What NOT to Log
 
-<!-- Sensitive data, PII, secrets -->
-
-(To be filled by the team)
+- Sensitive tokens, credentials, or private user data.
+- Full remote payload bodies unless strictly needed for troubleshooting.
+- Repeated noisy logs inside hot loops without clear diagnostic value.
