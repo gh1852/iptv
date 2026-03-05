@@ -1,7 +1,0 @@
-{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
-{"file": ".trellis/spec/shared/index.md", "reason": "Shared coding standards"}
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
-{"file": ".trellis/spec/frontend/components.md", "reason": "Component conventions"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Feature touches UI list structure and player error flow"}
-{"file": "app/src/main/java/com/jons/iptv/MainActivity.kt", "reason": "Existing menu/channel loading and playback retry flow"}
-{"file": "app/src/main/res/layout/activity_main.xml", "reason": "Current two-panel category/channel layout to be simplified"}

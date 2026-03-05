@@ -1,6 +1,0 @@
-{"file": ".claude/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
-{"file": ".trellis/spec/shared/index.md", "reason": "Shared coding standards"}
-{"file": ".claude/commands/trellis/check-backend.md", "reason": "Backend check spec"}
-{"file": ".claude/commands/trellis/check-frontend.md", "reason": "Frontend check spec"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Review cross-layer data flow and failure handling"}
-{"file": "app/src/main/java/com/jons/iptv/data/M3uParser.kt", "reason": "Verify parser compatibility and empty-result handling"}
