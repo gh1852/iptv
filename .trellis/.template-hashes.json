@@ -46,6 +46,5 @@
   ".claude/hooks/inject-subagent-context.py": "3cc16fd8c6c8eb232e33538080ee7c00ee3b613df454a87da86d1856e48f2c2c",
   ".claude/hooks/ralph-loop.py": "fd2b8cb40cbaa6428e7d1a9a89189c9481e2279165ee5b7fa5d1dd1d42b02662",
   ".claude/hooks/session-start.py": "67b5fc4ab01b74d0352e12af5f99eada48996a88fb188216cc741e94b619894a",
-  ".claude/settings.json": "f03439ad594adb545fdeeb7cf564726d35972d37c73e5c632f6c64a4d1fed7c9",
-  ".claude/settings.local.json": "8ec62fd561cd769ac823e2e319dfee1948764b5c1404903b16aba203ef15db87"
+  ".claude/settings.json": "f03439ad594adb545fdeeb7cf564726d35972d37c73e5c632f6c64a4d1fed7c9"
 }
