@@ -14,6 +14,8 @@ type(scope): description
 [optional footer]
 ```
 
+**Rule**: `description` must be written in Chinese (after `type(scope):`).
+
 ### Types
 
 | Type       | Description                                             |
