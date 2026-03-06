@@ -12,12 +12,12 @@ import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 class ChannelRepository(
-    private val playlistUrl: String = "https://ghfast.top/https://raw.githubusercontent.com/gh1852/iptv-api/refs/heads/master/output/result.txt",
+    private val playlistUrl: String = "http://192.140.163.220:9986/%E5%B1%BF%E9%A3%8E%E7%9C%A0%E6%98%9F%E8%BE%9E%E9%9B%BE%E5%90%AC%E6%BE%9C%E4%B9%A6%E7%A6%BE%E5%BF%B5%E5%AE%89%E7%9F%A5%E5%A4%8F%E9%81%87%E7%A7%8B%E5%AF%BB%E5%86%AC%E8%A7%82%E6%9C%88.txt",
     private val logoBaseUrl: String = "https://ghfast.top/https://raw.githubusercontent.com/CCSH/IPTV/main/logo"
 ) {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(2, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
         .build()
 
     fun preloadChannels() {

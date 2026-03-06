@@ -11,7 +11,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 class AppUpdateRepository(
-    private val metadataUrl: String = "https://github.com/gh1852/iptv/releases/latest/download/latest.json"
+    private val metadataUrl: String = "https://github.com/gh1852/iptv/releases/latest/download/stable.json"
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)

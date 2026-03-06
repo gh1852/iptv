@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity() {
                     TAG,
                     "Retry current stream with forced HLS channel=${channel.name}, index=$currentStreamIndex"
                 )
-                retryCurrentStream(channel, currentStreamIndex, forceHls = true)
+                retryCurrentStream(channel, currentStreamIndex)
                 return
             }
 
@@ -719,7 +719,7 @@ class MainActivity : AppCompatActivity() {
 
         runCatching {
             resetAudioTrackReselectState()
-            val mediaItem = buildMediaItem(streamUrl, forceHls = forceHls)
+            val mediaItem = buildMediaItem(streamUrl)
             player.setMediaItem(mediaItem)
             player.prepare()
             player.playWhenReady = true
@@ -793,31 +793,13 @@ class MainActivity : AppCompatActivity() {
         return "${channel.category}|${channel.name}"
     }
 
-    private fun buildMediaItem(url: String, forceHls: Boolean = false): MediaItem {
-        val inferredMimeType = if (forceHls) MimeTypes.APPLICATION_M3U8 else inferMimeType(url)
+    private fun buildMediaItem(url: String): MediaItem {
         return MediaItem.Builder()
             .setUri(url)
             .apply {
-                if (inferredMimeType != null) {
-                    setMimeType(inferredMimeType)
-                }
+                setMimeType(MimeTypes.APPLICATION_M3U8)
             }
             .build()
-    }
-
-    private fun inferMimeType(url: String): String? {
-        val parsed = Uri.parse(url)
-        val normalizedUrl = url.lowercase()
-        val path = parsed.path?.lowercase().orEmpty()
-
-        return when {
-            path.endsWith(".m3u8") || normalizedUrl.contains(".m3u8?") -> MimeTypes.APPLICATION_M3U8
-            path.endsWith(".mpd") || normalizedUrl.contains(".mpd?") -> MimeTypes.APPLICATION_MPD
-            path.endsWith(".ism") || path.endsWith(".isml") || normalizedUrl.contains("format=ism") -> MimeTypes.APPLICATION_SS
-            path.endsWith(".mp4") || normalizedUrl.contains(".mp4?") -> MimeTypes.VIDEO_MP4
-            path.endsWith(".ts") || normalizedUrl.contains(".ts?") -> MimeTypes.VIDEO_MP2T
-            else -> null
-        }
     }
 
     private fun applyAudioTrackFallbackIfNeeded() {
