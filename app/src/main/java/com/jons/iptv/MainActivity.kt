@@ -178,6 +178,8 @@ class MainActivity : AppCompatActivity() {
     private fun initList() {
         binding.groupedChannelRecycler.layoutManager = LinearLayoutManager(this)
         binding.groupedChannelRecycler.adapter = groupedChannelAdapter
+        binding.loadingContainer.visibility = View.VISIBLE
+        binding.menuContent.visibility = View.GONE
     }
 
     private fun initMenuInteractions() {
@@ -190,6 +192,9 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             runCatching { repository.getChannels() }
                 .onSuccess { channels ->
+                    binding.loadingContainer.visibility = View.GONE
+                    binding.menuContent.visibility = View.VISIBLE
+
                     val groupedChannels = buildGroupedChannels(channels)
                     val initialChannel = resolveInitialChannel(groupedChannels)
                     groupedChannelAdapter.submitGroups(groupedChannels, initialChannel?.category)
@@ -209,6 +214,8 @@ class MainActivity : AppCompatActivity() {
                     triggerUpdateCheckAfterFirstRender()
                 }
                 .onFailure {
+                    binding.loadingContainer.visibility = View.GONE
+                    binding.menuContent.visibility = View.VISIBLE
                     Toast.makeText(this@MainActivity, getString(R.string.load_failed), Toast.LENGTH_LONG).show()
                 }
         }
