@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
@@ -227,6 +228,11 @@ class PlayerEngineCoordinator(
             Log.d(logTag, "Build media item url=$url")
             MediaItem.Builder()
                 .setUri(url)
+                .apply {
+                    when {
+                        url.contains("miguVIP.php") -> setMimeType(MimeTypes.APPLICATION_M3U8)
+                    }
+                }
                 .build()
         }
         playbackController = PlaybackController(
