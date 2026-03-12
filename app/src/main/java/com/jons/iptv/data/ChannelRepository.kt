@@ -203,8 +203,7 @@ class ChannelRepository(
         private const val MEDIA3_VERSION = "1.6.0"
         private val PROXY_PREFIXES = listOf(
             "https://wget.la/",
-            "https://ghfast.top/",
-            "https://edgeone.gh-proxy.org/"
+            "https://ghfast.top/"
         )
         private val preloadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val preloadLock = Any()
