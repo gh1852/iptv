@@ -27,4 +27,5 @@
     <string name="update_dialog_message_no_changelog">发现新版本：%1$s</string>
     <string name="update_action_now">立即更新</string>
     <string name="update_action_later">稍后再说</string>
+    <string name="update_download_progress">下载进度: %1$d%%</string>
 </resources>

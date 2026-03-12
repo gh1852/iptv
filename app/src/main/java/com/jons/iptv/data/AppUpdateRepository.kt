@@ -10,13 +10,14 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import okio.BufferedSource
 
 class AppUpdateRepository(
     private val metadataUrl: String = "https://github.com/gh1852/iptv/releases/latest/download/latest.json"
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private fun buildProxyCandidates(url: String): List<String> {
@@ -81,7 +82,11 @@ class AppUpdateRepository(
         throw IllegalStateException("Failed to fetch update metadata from all proxy candidates", lastError)
     }
 
-    suspend fun downloadApk(apkUrl: String, targetFile: File): File = withContext(Dispatchers.IO) {
+    suspend fun downloadApk(
+        apkUrl: String,
+        targetFile: File,
+        onProgress: (downloaded: Long, total: Long) -> Unit
+    ): File = withContext(Dispatchers.IO) {
         targetFile.parentFile?.mkdirs()
         if (targetFile.exists()) {
             targetFile.delete()
@@ -102,9 +107,29 @@ class AppUpdateRepository(
                     }
 
                     val body = response.body ?: throw IllegalStateException("Empty APK response body")
-                    body.byteStream().use { input ->
-                        FileOutputStream(targetFile).use { output ->
-                            input.copyTo(output)
+                    val totalBytes = body.contentLength()
+                    val source: BufferedSource = body.source()
+
+                    FileOutputStream(targetFile).use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var downloadedBytes = 0L
+                        var lastReportedProgress = -1L
+
+                        while (true) {
+                            val read = source.read(buffer)
+                            if (read <= 0) break
+
+                            output.write(buffer, 0, read)
+                            downloadedBytes += read
+
+                            // Report progress every 1%
+                            if (totalBytes > 0) {
+                                val progress = (downloadedBytes * 100 / totalBytes)
+                                if (progress != lastReportedProgress) {
+                                    lastReportedProgress = progress
+                                    onProgress(downloadedBytes, totalBytes)
+                                }
+                            }
                         }
                     }
                 }
