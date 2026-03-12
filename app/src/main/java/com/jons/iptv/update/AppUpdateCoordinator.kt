@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -27,6 +28,7 @@ class AppUpdateCoordinator(
     private val logTag: String
 ) {
     private var updateDialog: Dialog? = null
+    private var progressDialog: Dialog? = null
     private var updateDialogAnimatedDismiss: Boolean = false
 
     fun checkUpdateSilently() {
@@ -117,17 +119,40 @@ class AppUpdateCoordinator(
     }
 
     fun downloadAndInstallUpdate(updateInfo: UpdateInfo) {
-        activity.lifecycleScope.launch {
-            Toast.makeText(activity, activity.getString(R.string.update_downloading), Toast.LENGTH_SHORT).show()
+        if (activity.isFinishing || activity.isDestroyed) return
 
+        val dialogView = activity.layoutInflater.inflate(R.layout.dialog_update_progress, null)
+        val progressBar = dialogView.findViewById<ProgressBar>(R.id.progressBar)
+        val progressText = dialogView.findViewById<TextView>(R.id.progressPercent)
+
+        progressDialog = Dialog(activity).apply {
+            setContentView(dialogView)
+            setCancelable(false)
+            setCanceledOnTouchOutside(false)
+            window?.setBackgroundDrawableResource(android.R.color.transparent)
+            window?.setLayout(
+                activity.resources.getDimensionPixelSize(R.dimen.update_dialog_fixed_width),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            show()
+        }
+
+        activity.lifecycleScope.launch {
             val updateDir = File(activity.cacheDir, "updates")
             val targetFile = File(updateDir, "iptv-update-${updateInfo.versionCode}.apk")
 
             runCatching {
-                val downloaded = appUpdateRepository.downloadApk(updateInfo.apkUrl, targetFile)
+                val downloaded = appUpdateRepository.downloadApk(updateInfo.apkUrl, targetFile) { downloaded, total ->
+                    activity.runOnUiThread {
+                        val percent = if (total > 0) ((downloaded * 100) / total).toInt() else 0
+                        progressBar.progress = percent
+                        progressText.text = activity.getString(R.string.update_download_progress, percent)
+                    }
+                }
                 appUpdateRepository.verifySha256(downloaded, updateInfo.sha256)
                 downloaded
             }.onSuccess { apkFile ->
+                progressDialog?.dismiss()
                 if (!canRequestPackageInstallsCompat()) {
                     Toast.makeText(
                         activity,
@@ -139,6 +164,7 @@ class AppUpdateCoordinator(
                 }
                 installDownloadedApk(apkFile)
             }.onFailure { throwable ->
+                progressDialog?.dismiss()
                 Log.w(logTag, "Update install flow failed", throwable)
                 val messageRes = if (throwable.message?.contains("SHA256", ignoreCase = true) == true) {
                     R.string.update_verification_failed
