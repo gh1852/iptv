@@ -3,11 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val forceUpdate: Boolean by project
-val minSupportedVersionCode: Int by project
-val versionCode: Int by project
-val versionName: String by project
-
 android {
     namespace = "com.jons.iptv"
     compileSdk = 35
