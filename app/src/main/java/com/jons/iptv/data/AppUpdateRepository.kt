@@ -182,8 +182,8 @@ class AppUpdateRepository(
     private companion object {
         private const val MEDIA3_VERSION = "1.6.0"
         val PROXY_PREFIXES = listOf(
-            "https://edgeone.gh-proxy.org/",
-            "https://ghfast.top/"
+            "https://ghfast.top/",
+            "https://wget.la/"
         )
     }
 }
