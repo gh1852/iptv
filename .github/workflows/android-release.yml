@@ -43,6 +43,8 @@ jobs:
           VERSION_OUTPUT=$(./gradlew -q :app:printVersionInfo)
           VERSION_CODE=$(printf '%s\n' "$VERSION_OUTPUT" | awk -F= '/^VERSION_CODE=/{print $2}')
           VERSION_NAME=$(printf '%s\n' "$VERSION_OUTPUT" | awk -F= '/^VERSION_NAME=/{print $2}')
+          FORCE_UPDATE=$(printf '%s\n' "$VERSION_OUTPUT" | awk -F= '/^FORCE_UPDATE=/{print $2}')
+          MIN_SUPPORTED_VERSION_CODE=$(printf '%s\n' "$VERSION_OUTPUT" | awk -F= '/^MIN_SUPPORTED_VERSION_CODE=/{print $2}')
 
           if [[ -z "$VERSION_CODE" || -z "$VERSION_NAME" ]]; then
             echo "Failed to read versionCode/versionName from Gradle output"
@@ -53,6 +55,8 @@ jobs:
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "tag_name=v$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "force_update=$FORCE_UPDATE" >> "$GITHUB_OUTPUT"
+          echo "min_supported_version_code=$MIN_SUPPORTED_VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Validate tag matches versionName
         if: startsWith(github.ref, 'refs/tags/')
@@ -130,7 +134,9 @@ jobs:
           VERSION_CODE='${{ steps.version.outputs.version_code }}'
           VERSION_NAME='${{ steps.version.outputs.version_name }}'
           TAG_NAME='${{ steps.version.outputs.tag_name }}'
-          export VERSION_CODE VERSION_NAME TAG_NAME APK_NAME SHA256 CHANGELOG RELEASE_NOTES_URL GITHUB_REPOSITORY
+          FORCE_UPDATE='${{ steps.version.outputs.force_update }}'
+          MIN_SUPPORTED_VERSION_CODE='${{ steps.version.outputs.min_supported_version_code }}'
+          export VERSION_CODE VERSION_NAME TAG_NAME FORCE_UPDATE MIN_SUPPORTED_VERSION_CODE APK_NAME SHA256 CHANGELOG RELEASE_NOTES_URL GITHUB_REPOSITORY
 
           python3 - <<'PY'
           import json
@@ -143,8 +149,8 @@ jobs:
               "sha256": os.environ["SHA256"],
               "changelog": os.environ["CHANGELOG"],
               "releaseNotesUrl": os.environ["RELEASE_NOTES_URL"],
-              "force": False,
-              "minSupportedVersionCode": 1,
+              "force": os.environ.get("FORCE_UPDATE", "false").lower() == "true",
+              "minSupportedVersionCode": int(os.environ.get("MIN_SUPPORTED_VERSION_CODE", "1")),
           }
 
           with open("latest.json", "w", encoding="utf-8") as f:

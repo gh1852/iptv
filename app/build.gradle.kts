@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val forceUpdate: Boolean by project
+val minSupportedVersionCode: Int by project
+
 android {
     namespace = "com.jons.iptv"
     compileSdk = 35
@@ -45,6 +48,8 @@ tasks.register("printVersionInfo") {
     doLast {
         println("VERSION_CODE=${android.defaultConfig.versionCode}")
         println("VERSION_NAME=${android.defaultConfig.versionName}")
+        println("FORCE_UPDATE=$forceUpdate")
+        println("MIN_SUPPORTED_VERSION_CODE=$minSupportedVersionCode")
     }
 }
 
