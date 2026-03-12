@@ -126,7 +126,15 @@ jobs:
 
           SHA256=$(sha256sum "$APK_NAME" | cut -d ' ' -f 1)
           RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ steps.version.outputs.tag_name }}"
-          CHANGELOG=$(git log --no-merges -n 10 --pretty=format:'- %s')
+
+          # Get changelog since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [[ -n "$LAST_TAG" ]]; then
+            CHANGELOG=$(git log --no-merges "$LAST_TAG"..HEAD --pretty=format:'- %s' | head -20)
+          else
+            CHANGELOG=$(git log --no-merges -n 20 --pretty=format:'- %s')
+          fi
+
           if [[ -z "$CHANGELOG" ]]; then
             CHANGELOG="See GitHub release notes"
           fi
