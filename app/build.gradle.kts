@@ -16,8 +16,8 @@ android {
         applicationId = "com.jons.iptv"
         minSdk = 21
         targetSdk = 35
-        this.versionCode = versionCode
-        this.versionName = versionName
+        versionCode = project.property("versionCode").toString().toInt()
+        versionName = project.property("versionName").toString()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -48,10 +48,10 @@ android {
 
 tasks.register("printVersionInfo") {
     doLast {
-        println("VERSION_CODE=${android.defaultConfig.versionCode}")
-        println("VERSION_NAME=${android.defaultConfig.versionName}")
-        println("FORCE_UPDATE=$forceUpdate")
-        println("MIN_SUPPORTED_VERSION_CODE=$minSupportedVersionCode")
+        println("VERSION_CODE=${project.property("versionCode")}")
+        println("VERSION_NAME=${project.property("versionName")}")
+        println("FORCE_UPDATE=${project.property("forceUpdate")}")
+        println("MIN_SUPPORTED_VERSION_CODE=${project.property("minSupportedVersionCode")}")
     }
 }
 
