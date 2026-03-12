@@ -69,3 +69,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: 版本配置集中管理
+
+**Date**: 2026-03-12
+**Task**: 版本配置集中管理
+
+### Summary
+
+将 forceUpdate、minSupportedVersionCode、versionCode、versionName 统一配置到 gradle.properties，便于集中管理版本和更新策略
+
+### Main Changes
+
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7dc6869` | (see git log) |
+| `1601cfe` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
