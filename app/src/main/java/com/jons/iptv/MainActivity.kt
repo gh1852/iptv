@@ -296,6 +296,11 @@ class MainActivity : AppCompatActivity() {
         appUpdateCoordinator.checkUpdateSilently()
     }
 
+    override fun onResume() {
+        super.onResume()
+        appUpdateCoordinator.resumePendingUpdateIfNeeded()
+    }
+
     override fun onStart() {
         super.onStart()
         playerEngineCoordinator.onStart()

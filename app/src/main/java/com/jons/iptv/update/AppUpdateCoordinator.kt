@@ -31,6 +31,15 @@ class AppUpdateCoordinator(
     private var progressDialog: Dialog? = null
     private var updateDialogAnimatedDismiss: Boolean = false
 
+    private enum class PendingUpdateStep {
+        NEED_PERMISSION_BEFORE_DOWNLOAD,
+        NEED_PERMISSION_BEFORE_INSTALL
+    }
+
+    private var pendingUpdateInfo: UpdateInfo? = null
+    private var pendingApkFile: File? = null
+    private var pendingStep: PendingUpdateStep? = null
+
     fun checkUpdateSilently() {
         activity.lifecycleScope.launch {
             runCatching { appUpdateRepository.fetchLatest() }
@@ -120,6 +129,17 @@ class AppUpdateCoordinator(
 
     fun downloadAndInstallUpdate(updateInfo: UpdateInfo) {
         if (activity.isFinishing || activity.isDestroyed) return
+        if (!canRequestPackageInstallsCompat()) {
+            pendingUpdateInfo = updateInfo
+            pendingStep = PendingUpdateStep.NEED_PERMISSION_BEFORE_DOWNLOAD
+            Toast.makeText(
+                activity,
+                activity.getString(R.string.update_install_permission_required),
+                Toast.LENGTH_LONG
+            ).show()
+            openUnknownSourcesSettings()
+            return
+        }
 
         val dialogView = activity.layoutInflater.inflate(R.layout.dialog_update_progress, null)
         val progressBar = dialogView.findViewById<ProgressBar>(R.id.progressBar)
@@ -154,6 +174,8 @@ class AppUpdateCoordinator(
             }.onSuccess { apkFile ->
                 progressDialog?.dismiss()
                 if (!canRequestPackageInstallsCompat()) {
+                    pendingApkFile = apkFile
+                    pendingStep = PendingUpdateStep.NEED_PERMISSION_BEFORE_INSTALL
                     Toast.makeText(
                         activity,
                         activity.getString(R.string.update_install_permission_required),
@@ -165,6 +187,7 @@ class AppUpdateCoordinator(
                 installDownloadedApk(apkFile)
             }.onFailure { throwable ->
                 progressDialog?.dismiss()
+                clearPendingUpdate()
                 Log.w(logTag, "Update install flow failed", throwable)
                 val messageRes = if (throwable.message?.contains("SHA256", ignoreCase = true) == true) {
                     R.string.update_verification_failed
@@ -181,6 +204,31 @@ class AppUpdateCoordinator(
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || activity.packageManager.canRequestPackageInstalls()
     }
 
+    fun resumePendingUpdateIfNeeded() {
+        if (activity.isFinishing || activity.isDestroyed) return
+        val step = pendingStep ?: return
+        if (!canRequestPackageInstallsCompat()) return
+
+        when (step) {
+            PendingUpdateStep.NEED_PERMISSION_BEFORE_DOWNLOAD -> {
+                val updateInfo = pendingUpdateInfo ?: return
+                clearPendingUpdate()
+                downloadAndInstallUpdate(updateInfo)
+            }
+            PendingUpdateStep.NEED_PERMISSION_BEFORE_INSTALL -> {
+                val apkFile = pendingApkFile ?: return
+                clearPendingUpdate()
+                installDownloadedApk(apkFile)
+            }
+        }
+    }
+
+    private fun clearPendingUpdate() {
+        pendingUpdateInfo = null
+        pendingApkFile = null
+        pendingStep = null
+    }
+
     fun openUnknownSourcesSettings() {
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -190,6 +238,7 @@ class AppUpdateCoordinator(
                 activity.startActivity(intent)
             }
         }.onFailure {
+            clearPendingUpdate()
             Toast.makeText(activity, activity.getString(R.string.update_install_start_failed), Toast.LENGTH_SHORT).show()
         }
     }
@@ -204,6 +253,7 @@ class AppUpdateCoordinator(
             }
             activity.startActivity(intent)
         }.onFailure {
+            clearPendingUpdate()
             Log.w(logTag, "Failed to launch installer", it)
             Toast.makeText(activity, activity.getString(R.string.update_install_start_failed), Toast.LENGTH_LONG).show()
         }
