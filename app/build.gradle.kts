@@ -5,6 +5,8 @@ plugins {
 
 val forceUpdate: Boolean by project
 val minSupportedVersionCode: Int by project
+val versionCode: Int by project
+val versionName: String by project
 
 android {
     namespace = "com.jons.iptv"
@@ -14,8 +16,8 @@ android {
         applicationId = "com.jons.iptv"
         minSdk = 21
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.0.8"
+        this.versionCode = versionCode
+        this.versionName = versionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
