@@ -128,7 +128,7 @@ jobs:
           RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ steps.version.outputs.tag_name }}"
 
           # Get changelog since last tag
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          LAST_TAG=$(git describe --tags --abbrev=0 --exclude "${{ steps.version.outputs.tag_name }}" 2>/dev/null || echo "")
           if [[ -n "$LAST_TAG" ]]; then
             CHANGELOG=$(git log --no-merges "$LAST_TAG"..HEAD --pretty=format:'- %s' | head -20)
           else

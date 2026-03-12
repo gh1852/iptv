@@ -46,19 +46,19 @@ Scope should identify the affected area:
 
 ```bash
 # Feature
-feat(project): add project archive functionality
+feat(project): 添加项目归档功能
 
 # Bug fix
-fix(db): resolve migration timing issue
+fix(db): 修复迁移时序问题
 
 # Refactor
-refactor(ipc): extract common validation logic
+refactor(ipc): 提取通用校验逻辑
 
 # Documentation
-docs: update API documentation
+docs: 更新 API 文档
 
 # Chore
-chore: upgrade build tooling
+chore: 升级构建工具
 ```
 
 ---
