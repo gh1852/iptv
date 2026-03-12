@@ -37,3 +37,35 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: 优化 APK 下载体验 - 添加进度显示
+
+**Date**: 2026-03-12
+**Task**: 优化 APK 下载体验 - 添加进度显示
+
+### Summary
+
+为应用更新功能添加下载进度显示，包括：1) 添加下载进度回调和百分比显示；2) 增加 OkHttp readTimeout 从 10s 到 30s；3) 创建进度对话框布局和样式
+
+### Main Changes
+
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f6ac4f6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
