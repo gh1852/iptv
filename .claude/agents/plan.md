@@ -159,12 +159,7 @@ This creates base jsonl files with standard specs for the dev type.
 
 ### Step 2: Analyze Codebase with Research Agent
 
-Call research agent to find relevant specs and code patterns.
-
-Parallel execution policy:
-- Start with one research call.
-- If requirement spans multiple domains, split into parallel research calls by domain.
-- Maximum concurrent research calls: **3**.
+Call research agent to find relevant specs and code patterns:
 
 ```
 Task(

@@ -46,6 +46,10 @@ cat .trellis/spec/guides/index.md    # Thinking guides
 cat .trellis/spec/unit-test/index.md # Testing guidelines
 ```
 
+> **Important**: The index files are navigation — they list the actual guideline files (e.g., `error-handling.md`, `conventions.md`, `mock-strategies.md`).
+> At this step, just read the indexes to understand what's available.
+> When you start actual development, you MUST go back and read the specific guideline files relevant to your task, as listed in the index's Pre-Development Checklist.
+
 ### Step 4: Report and Ask
 
 Report what you learned and ask: "What would you like to work on?"
@@ -100,15 +104,23 @@ For questions or trivial fixes, work directly:
 
 For simple, well-defined tasks:
 
-1. Quick confirm: "I understand you want to [goal]. Ready to proceed?"
-2. If yes, proceed to **Task Workflow Phase 1 Path B** (create task, write PRD, then research)
-3. If no, clarify and confirm again
+1. Quick confirm: "I understand you want to [goal]. Shall I proceed?"
+2. If no, clarify and confirm again
+3. **If yes: execute ALL steps below without stopping. Do NOT ask for additional confirmation between steps.**
+   - Create task directory (Phase 1 Path B, Step 2)
+   - Write PRD (Step 3)
+   - Research codebase (Phase 2, Step 5)
+   - Configure context (Step 6)
+   - Activate task (Step 7)
+   - Implement (Phase 3, Step 8)
+   - Check quality (Step 9)
+   - Complete (Step 10)
 
 ---
 
 ## Complex Task - Brainstorm First
 
-For complex or vague tasks, use the brainstorm process to clarify requirements.
+For complex or vague tasks, **automatically start the brainstorm process** — do NOT skip directly to implementation.
 
 See `/trellis:brainstorm` for the full process. Summary:
 
@@ -118,6 +130,10 @@ See `/trellis:brainstorm` for the full process. Summary:
 4. **Propose approaches** - For architectural decisions
 5. **Confirm final requirements** - Get explicit approval
 6. **Proceed to Task Workflow** - With clear requirements in PRD
+
+> **Subtask Decomposition**: If brainstorm reveals multiple independent work items,
+> consider creating subtasks using `--parent` flag or `add-subtask` command.
+> See `/trellis:brainstorm` Step 8 for details.
 
 ### Key Brainstorm Principles
 
@@ -220,12 +236,7 @@ Must-have before proceeding:
 
 **Step 5: Research the Codebase** `[AI]`
 
-Based on the confirmed PRD, call Research Agent to find relevant specs and patterns.
-
-**Parallelism rule**:
-- Use **1** research agent for normal tasks.
-- For broad/cross-layer tasks, you may run research in parallel by splitting scope.
-- Maximum concurrent research agents: **3**.
+Based on the confirmed PRD, call Research Agent to find relevant specs and patterns:
 
 ```
 Task(

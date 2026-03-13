@@ -2,7 +2,7 @@
 name: research
 description: |
   Code and tech search expert. Pure research, no code modifications. Finds files, patterns, and tech solutions.
-tools: Read, Glob, Grep, mcp__fast-context__fast_context_search, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa, mcp__exa2__web_search_exa, mcp__exa2__get_code_context_exa, Skill, mcp__chrome-devtools__*
+tools: Read, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa, Skill, mcp__chrome-devtools__*
 model: opus
 ---
 # Research Agent
@@ -66,20 +66,12 @@ Analyze the query, determine:
 
 Execute multiple independent searches in parallel for efficiency.
 
-**Preferred tool order**:
-1. **Internal codebase**: Use `mcp__fast-context__fast_context_search` first for broad discovery, then follow up with `Glob/Grep/Read` for precision.
-2. **External search**: Use `mcp__exa2__*` tools first, fall back to `mcp__exa__*` if needed.
-
-**Parallelism limit**:
-- Default: 1 research execution
-- For broad tasks: split into at most **3 parallel** research executions
-- Never exceed 3 concurrent research executions in a single round
-
 ### Step 3: Organize Results
 
 Output structured results in report format.
 
 ---
+
 ## Report Format
 
 ```markdown
