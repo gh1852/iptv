@@ -132,9 +132,9 @@ jobs:
           # Get changelog since last tag
           LAST_TAG=$(git describe --tags --abbrev=0 --exclude "${{ steps.version.outputs.tag_name }}" 2>/dev/null || echo "")
           if [[ -n "$LAST_TAG" ]]; then
-            CHANGELOG=$(git log --no-merges "$LAST_TAG"..HEAD --pretty=format:'- %s' | head -5)
+            CHANGELOG=$(git log --no-merges "$LAST_TAG"..HEAD --pretty=format:'- %s' | head -3)
           else
-            CHANGELOG=$(git log --no-merges -n 5 --pretty=format:'- %s')
+            CHANGELOG=$(git log --no-merges -n 3 --pretty=format:'- %s')
           fi
 
           if [[ -z "$CHANGELOG" ]]; then
