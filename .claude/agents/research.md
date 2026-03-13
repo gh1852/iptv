@@ -66,6 +66,11 @@ Analyze the query, determine:
 
 Execute multiple independent searches in parallel for efficiency.
 
+**Parallelism limit**:
+- Default: 1 research execution
+- For broad tasks: split into at most **3 parallel** research executions
+- Never exceed 3 concurrent research executions in a single round
+
 ### Step 3: Organize Results
 
 Output structured results in report format.
