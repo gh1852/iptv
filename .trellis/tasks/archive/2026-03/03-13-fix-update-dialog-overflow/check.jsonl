@@ -1,0 +1,5 @@
+{"file": ".claude/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".claude/commands/trellis/check-frontend.md", "reason": "Frontend check spec"}
+{"file": ".trellis/spec/frontend/components.md", "reason": "Dialog coordinator patterns and update dialog guidance"}
+{"file": ".trellis/spec/frontend/xml-design.md", "reason": "Dialog layout and resource styling rules"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Coordinator ownership guidelines"}

@@ -1,0 +1,5 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/frontend/components.md", "reason": "Dialog coordinator patterns and update dialog guidance"}
+{"file": ".trellis/spec/frontend/xml-design.md", "reason": "Dialog layout and resource styling rules"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Coordinator ownership guidelines"}
