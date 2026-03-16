@@ -165,7 +165,7 @@ class PlaybackController(
     }
 
     companion object {
-        private const val DEFAULT_BUFFERING_TIMEOUT_MS = 15_000L
+        private const val DEFAULT_BUFFERING_TIMEOUT_MS = 8_000L
         private const val DEFAULT_SWITCH_GAP_MS = 500L
         private const val MAX_BUFFERING_COUNT = 3
     }
