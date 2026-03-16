@@ -52,6 +52,12 @@ class PlaybackController(
                 logger.i("First frame ready channel=${updated.channel.name}, index=${updated.streamIndex}")
                 callbacks.onStreamPlaying(updated.channel, updated.streamIndex)
             }
+            Player.STATE_ENDED -> {
+                cancelBufferingTimeout()
+                val session = store.session ?: return
+                logger.w("Stream ended unexpectedly channel=${session.channel.name}, index=${session.streamIndex}")
+                switchToNextOrFail(session.channel, session.streamIndex, reason = "stream_ended")
+            }
             else -> cancelBufferingTimeout()
         }
     }
