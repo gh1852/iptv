@@ -41,6 +41,13 @@
 
 - 在真机验证起播速度和卡顿频率改善情况
 
+### Additional Fixes (same session)
+
+- `STATE_ENDED` 未处理导致画面永久冻结 → 调用 `switchToNextOrFail`
+- 累计卡顿3次自动切换备用源（不在STATE_READY时重置计数）
+- `HTTP_READ_TIMEOUT` 8s→4s，加快损坏源检测
+- 新增 spec: `.trellis/spec/big-question/exoplayer-live-stream-buffering.md`
+
 ---
 
 
