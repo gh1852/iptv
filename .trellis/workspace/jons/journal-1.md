@@ -219,3 +219,54 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: 优化直播流播放稳定性
+
+**Date**: 2026-03-16
+**Task**: 优化直播流播放稳定性
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+通过日志分析定位并修复多个导致直播IPTV卡顿和冻结的问题。
+
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| 起播慢/频繁卡顿 | MIN_BUFFER=30s/MAX_BUFFER=90s 针对点播，直播流无法维持 | MIN→5s, MAX→10s |
+| 循环卡顿(position倒退) | liveTargetOffset=3s 激进追赶直播边缘，加速消耗缓冲 | liveTargetOffset→8s |
+| 画面永久冻结 | STATE_ENDED 无处理，服务器断连后冻结 | 调用 switchToNextOrFail |
+| 烂源切换慢 | 单次buffering需等15s超时才切换 | 累计卡顿3次立即切换 |
+| 损坏源检测慢(36s) | HTTP_READ_TIMEOUT=8s 多次叠加 | 降至4s |
+
+**修改文件**:
+- `app/src/main/java/com/jons/iptv/playback/PlayerEngineCoordinator.kt`
+- `app/src/main/java/com/jons/iptv/playback/PlaybackController.kt`
+- `.trellis/spec/big-question/exoplayer-live-stream-buffering.md` (新增)
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f9f22b` | (see git log) |
+| `d5f5e2c` | (see git log) |
+| `1743531` | (see git log) |
+| `a48f767` | (see git log) |
+| `d25ef3f` | (see git log) |
+| `47a4f4b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
