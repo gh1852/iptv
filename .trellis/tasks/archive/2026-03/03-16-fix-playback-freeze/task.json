@@ -1,0 +1,44 @@
+{
+  "id": "fix-playback-freeze",
+  "name": "fix-playback-freeze",
+  "title": "fix: 频道播放偶尔卡住无恢复问题",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "priority": "P2",
+  "creator": "jons",
+  "assignee": "jons",
+  "createdAt": "2026-03-16",
+  "completedAt": "2026-03-16",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "current_phase": 0,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
