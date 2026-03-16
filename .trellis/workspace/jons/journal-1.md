@@ -132,3 +132,45 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: fix: 频道播放卡住无恢复问题
+
+**Date**: 2026-03-16
+**Task**: fix: 频道播放卡住无恢复问题
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 变更 | 描述 |
+|------|------|
+| PlaybackController.kt | 将首帧超时改为全局 buffering 超时保护 |
+
+**问题根因**: 原代码只有首帧渲染前的 5s 超时保护。首帧渲染后，若播放中途因网络抖动/断流进入 `STATE_BUFFERING`，ExoPlayer 不抛 error，无任何超时检测，画面永久冻结。
+
+**修复**: 统一改为 buffering 超时机制——进入 `STATE_BUFFERING` 时启动 15s 计时器，`STATE_READY` 时取消；超时触发 `switchToNextOrFail` 切换备用源或报失败。同时覆盖首帧加载卡死和播放中途卡死两种场景。
+
+**Updated Files**:
+- `app/src/main/java/com/jons/iptv/playback/PlaybackController.kt`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `609ce17` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
