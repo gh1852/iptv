@@ -11,7 +11,7 @@ class PlaybackController(
     private val playerAdapter: ExoPlayerAdapter,
     private val logger: PlaybackLogger,
     private val callbacks: Callbacks,
-    private val firstFrameTimeoutMs: Long = DEFAULT_FIRST_FRAME_TIMEOUT_MS,
+    private val bufferingTimeoutMs: Long = DEFAULT_BUFFERING_TIMEOUT_MS,
     private val switchGapMs: Long = DEFAULT_SWITCH_GAP_MS,
     private val handler: Handler = Handler(Looper.getMainLooper())
 ) {
@@ -22,7 +22,7 @@ class PlaybackController(
         fun onAllSourcesFailed(channel: Channel)
     }
 
-    private var firstFrameTimeoutRunnable: Runnable? = null
+    private var bufferingTimeoutRunnable: Runnable? = null
     private var delayedSwitchRunnable: Runnable? = null
 
     fun play(channel: Channel, startIndex: Int = 0) {
@@ -39,19 +39,21 @@ class PlaybackController(
     }
 
     fun onPlaybackStateChanged(playbackState: Int) {
-        if (playbackState != Player.STATE_READY) {
-            return
+        when (playbackState) {
+            Player.STATE_BUFFERING -> {
+                val session = store.session ?: return
+                scheduleBufferingTimeout(session)
+            }
+            Player.STATE_READY -> {
+                cancelBufferingTimeout()
+                val session = store.session ?: return
+                if (session.firstFrameRendered) return
+                val updated = store.markPlaying(session.id) ?: return
+                logger.i("First frame ready channel=${updated.channel.name}, index=${updated.streamIndex}")
+                callbacks.onStreamPlaying(updated.channel, updated.streamIndex)
+            }
+            else -> cancelBufferingTimeout()
         }
-
-        val session = store.session ?: return
-        if (session.firstFrameRendered) {
-            return
-        }
-
-        cancelFirstFrameTimeout()
-        val updated = store.markPlaying(session.id) ?: return
-        logger.i("First frame ready channel=${updated.channel.name}, index=${updated.streamIndex}")
-        callbacks.onStreamPlaying(updated.channel, updated.streamIndex)
     }
 
     fun onPlayerError(error: PlaybackException) {
@@ -81,7 +83,6 @@ class PlaybackController(
         )
 
         callbacks.onPrepareToPlay(channel, streamIndex, url)
-        scheduleFirstFrameTimeout(session)
 
         runCatching {
             playerAdapter.play(url)
@@ -95,7 +96,7 @@ class PlaybackController(
     }
 
     private fun switchToNextOrFail(channel: Channel, currentIndex: Int, reason: String) {
-        cancelFirstFrameTimeout()
+        cancelBufferingTimeout()
 
         val nextIndex = currentIndex + 1
         if (nextIndex > channel.streamUrls.lastIndex) {
@@ -119,35 +120,33 @@ class PlaybackController(
         }
     }
 
-    private fun scheduleFirstFrameTimeout(session: PlaybackSession) {
-        cancelFirstFrameTimeout()
-        firstFrameTimeoutRunnable = Runnable {
+    private fun scheduleBufferingTimeout(session: PlaybackSession) {
+        cancelBufferingTimeout()
+        bufferingTimeoutRunnable = Runnable {
             val current = store.session
-            if (current == null || current.id != session.id || current.firstFrameRendered) {
-                return@Runnable
-            }
+            if (current == null || current.id != session.id) return@Runnable
             logger.w(
-                "First-frame timeout channel=${session.channel.name}, index=${session.streamIndex}, timeoutMs=$firstFrameTimeoutMs"
+                "Buffering timeout channel=${session.channel.name}, index=${session.streamIndex}, timeoutMs=$bufferingTimeoutMs"
             )
-            switchToNextOrFail(session.channel, session.streamIndex, reason = "first_frame_timeout")
+            switchToNextOrFail(session.channel, session.streamIndex, reason = "buffering_timeout")
         }.also {
-            handler.postDelayed(it, firstFrameTimeoutMs)
+            handler.postDelayed(it, bufferingTimeoutMs)
         }
     }
 
-    private fun cancelFirstFrameTimeout() {
-        firstFrameTimeoutRunnable?.let { handler.removeCallbacks(it) }
-        firstFrameTimeoutRunnable = null
+    private fun cancelBufferingTimeout() {
+        bufferingTimeoutRunnable?.let { handler.removeCallbacks(it) }
+        bufferingTimeoutRunnable = null
     }
 
     private fun clearPending() {
-        cancelFirstFrameTimeout()
+        cancelBufferingTimeout()
         delayedSwitchRunnable?.let { handler.removeCallbacks(it) }
         delayedSwitchRunnable = null
     }
 
     companion object {
-        private const val DEFAULT_FIRST_FRAME_TIMEOUT_MS = 5_000L
+        private const val DEFAULT_BUFFERING_TIMEOUT_MS = 15_000L
         private const val DEFAULT_SWITCH_GAP_MS = 500L
     }
 }
