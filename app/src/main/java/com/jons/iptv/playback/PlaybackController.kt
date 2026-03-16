@@ -24,6 +24,7 @@ class PlaybackController(
 
     private var bufferingTimeoutRunnable: Runnable? = null
     private var delayedSwitchRunnable: Runnable? = null
+    private var bufferingCount = 0
 
     fun play(channel: Channel, startIndex: Int = 0) {
         clearPending()
@@ -42,10 +43,18 @@ class PlaybackController(
         when (playbackState) {
             Player.STATE_BUFFERING -> {
                 val session = store.session ?: return
-                scheduleBufferingTimeout(session)
+                bufferingCount++
+                if (bufferingCount >= MAX_BUFFERING_COUNT) {
+                    logger.w("Buffering count reached $bufferingCount, switching source channel=${session.channel.name}, index=${session.streamIndex}")
+                    bufferingCount = 0
+                    switchToNextOrFail(session.channel, session.streamIndex, reason = "buffering_count_exceeded")
+                } else {
+                    scheduleBufferingTimeout(session)
+                }
             }
             Player.STATE_READY -> {
                 cancelBufferingTimeout()
+                resetBufferingCount()
                 val session = store.session ?: return
                 if (session.firstFrameRendered) return
                 val updated = store.markPlaying(session.id) ?: return
@@ -75,6 +84,10 @@ class PlaybackController(
         store.clear()
     }
 
+    private fun resetBufferingCount() {
+        bufferingCount = 0
+    }
+
     private fun attempt(channel: Channel, streamIndex: Int, reason: String) {
         if (streamIndex !in channel.streamUrls.indices) {
             store.markFailed()
@@ -88,6 +101,7 @@ class PlaybackController(
             "Attempt playback channel=${channel.name}, index=$streamIndex, reason=$reason"
         )
 
+        resetBufferingCount()
         callbacks.onPrepareToPlay(channel, streamIndex, url)
 
         runCatching {
@@ -154,5 +168,6 @@ class PlaybackController(
     companion object {
         private const val DEFAULT_BUFFERING_TIMEOUT_MS = 15_000L
         private const val DEFAULT_SWITCH_GAP_MS = 500L
+        private const val MAX_BUFFERING_COUNT = 3
     }
 }
