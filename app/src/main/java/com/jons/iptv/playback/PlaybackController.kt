@@ -54,7 +54,6 @@ class PlaybackController(
             }
             Player.STATE_READY -> {
                 cancelBufferingTimeout()
-                resetBufferingCount()
                 val session = store.session ?: return
                 if (session.firstFrameRendered) return
                 val updated = store.markPlaying(session.id) ?: return
