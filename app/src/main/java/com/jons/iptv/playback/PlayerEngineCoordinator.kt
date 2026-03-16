@@ -41,7 +41,7 @@ class PlayerEngineCoordinator(
         private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_MS = 500
         private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
         private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
-        private const val HTTP_READ_TIMEOUT_MS = 8_000
+        private const val HTTP_READ_TIMEOUT_MS = 4_000
         private const val OVERLAY_AUTO_HIDE_DELAY_MS = 3_000L
     }
 
