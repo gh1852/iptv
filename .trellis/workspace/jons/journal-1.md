@@ -7,6 +7,44 @@
 
 
 
+## Session 7: 优化直播流缓冲参数
+
+**Date**: 2026-03-18
+**Task**: 修复起播加载慢及播放频繁卡顿
+
+### Summary
+
+调整 ExoPlayer `DefaultLoadControl` 缓冲参数，将原本针对点播的大缓冲配置改为适合直播 IPTV 的小缓冲配置。
+
+### Root Cause
+
+`MIN_BUFFER_MS=30s` 过高，ExoPlayer 要维持 30s 预缓冲才认为缓冲区健康。直播流带宽有限，无法持续维持 30s 超前缓冲，导致频繁进入 `STATE_BUFFERING`，配合 15s 超时又触发切换备用源。起播也因为需要建立大缓冲而变慢。
+
+### Changes
+
+- `MIN_BUFFER_MS`: 30000 → 2000
+- `MAX_BUFFER_MS`: 90000 → 10000
+- `BUFFER_FOR_PLAYBACK_MS`: 800 → 500
+- `BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS`: 5000 → 1500
+
+### Git Commits
+
+| Hash | Message |
+|------|----------|
+| `2f9f22b` | perf(playback): 调整ExoPlayer缓冲参数以优化直播流体验 |
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 在真机验证起播速度和卡顿频率改善情况
+
+---
+
+
+
 ## Session 1: 更新提交规范
 
 **Date**: 2026-03-05
