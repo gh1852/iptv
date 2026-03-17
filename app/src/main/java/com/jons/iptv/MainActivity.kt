@@ -4,14 +4,12 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -34,7 +32,6 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
-        private const val MIN_SPLASH_DURATION_MS = 500L
         private const val PREF_LAST_CHANNEL = "last_channel_store"
         private const val KEY_LAST_CHANNEL_CATEGORY = "last_channel_category"
         private const val KEY_LAST_CHANNEL_NAME = "last_channel_name"
@@ -56,12 +53,6 @@ class MainActivity : AppCompatActivity() {
     private var hasDeferredUpdateCheck = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splashStartTime = SystemClock.uptimeMillis()
-        val splashScreen = installSplashScreen()
-        splashScreen.setKeepOnScreenCondition {
-            val elapsed = SystemClock.uptimeMillis() - splashStartTime
-            elapsed < MIN_SPLASH_DURATION_MS || !repository.isLoaded
-        }
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
