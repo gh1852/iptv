@@ -84,3 +84,26 @@ Live streams should never end. Server dropped connection or playlist contained `
 - Ignoring `STATE_ENDED` on live streams (permanent freeze)
 - High `HTTP_READ_TIMEOUT` (8s+) — multiplies into 30s+ detection time for malformed streams
 - Resetting stall count on `STATE_READY` (prevents cumulative detection of bad sources)
+- Using `DefaultHttpDataSource` — creates a new TCP connection per request; use `OkHttpDataSource` to reuse connection pool across source switches
+
+---
+
+## OkHttp DataSource
+
+Use `media3-datasource-okhttp` instead of `DefaultHttpDataSource` for connection pool reuse:
+
+```kotlin
+// build.gradle.kts
+implementation("androidx.media3:media3-datasource-okhttp:1.6.0")
+
+// PlayerEngineCoordinator.kt
+val okHttpClient = OkHttpClient.Builder()
+    .connectTimeout(HTTP_CONNECT_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+    .readTimeout(HTTP_READ_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+    .build()
+
+val httpDataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
+val dataSourceFactory = DefaultDataSource.Factory(activity, httpDataSourceFactory)
+```
+
+Benefit: when switching to a backup source on the same host, TCP connection is already established in the pool.
