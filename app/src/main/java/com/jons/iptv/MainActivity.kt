@@ -34,7 +34,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val BACK_PRESS_EXIT_WINDOW_MS = 2_000L
         private const val STARTUP_MENU_AUTO_HIDE_DELAY_MS = 1_500L
-        private const val MIN_SPLASH_DURATION_MS = 2000L
+        private const val MIN_SPLASH_DURATION_MS = 500L
         private const val PREF_LAST_CHANNEL = "last_channel_store"
         private const val KEY_LAST_CHANNEL_CATEGORY = "last_channel_category"
         private const val KEY_LAST_CHANNEL_NAME = "last_channel_name"
@@ -59,7 +59,8 @@ class MainActivity : AppCompatActivity() {
         val splashStartTime = SystemClock.uptimeMillis()
         val splashScreen = installSplashScreen()
         splashScreen.setKeepOnScreenCondition {
-            SystemClock.uptimeMillis() - splashStartTime < MIN_SPLASH_DURATION_MS
+            val elapsed = SystemClock.uptimeMillis() - splashStartTime
+            elapsed < MIN_SPLASH_DURATION_MS || !repository.isLoaded
         }
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)

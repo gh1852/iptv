@@ -214,4 +214,7 @@ class ChannelRepository(
         @Volatile
         private var cachedChannels: List<Channel>? = null
     }
+
+    val isLoaded: Boolean
+        get() = cachedChannels != null || (preloadDeferred != null && preloadDeferred?.isActive == false)
 }
