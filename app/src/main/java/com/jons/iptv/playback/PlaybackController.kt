@@ -95,7 +95,7 @@ class PlaybackController(
         }
 
         val url = channel.streamUrls[streamIndex]
-        val session = store.createSession(channel, streamIndex)
+        store.createSession(channel, streamIndex)
         logger.i(
             "Attempt playback channel=${channel.name}, index=$streamIndex, reason=$reason"
         )
