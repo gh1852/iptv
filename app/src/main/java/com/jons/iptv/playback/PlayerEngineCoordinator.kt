@@ -39,7 +39,7 @@ class PlayerEngineCoordinator(
 ) {
     companion object {
         private const val LOAD_CONTROL_MIN_BUFFER_MS = 5_000
-        private const val LOAD_CONTROL_MAX_BUFFER_MS = 10_000
+        private const val LOAD_CONTROL_MAX_BUFFER_MS = 15_000
         private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_MS = 500
         private const val LOAD_CONTROL_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
         private const val HTTP_CONNECT_TIMEOUT_MS = 4_000
