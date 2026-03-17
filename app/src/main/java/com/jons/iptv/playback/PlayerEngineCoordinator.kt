@@ -15,7 +15,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -195,10 +197,12 @@ class PlayerEngineCoordinator(
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(HTTP_CONNECT_TIMEOUT_MS)
-            .setReadTimeoutMs(HTTP_READ_TIMEOUT_MS)
-            .setKeepPostFor302Redirects(true)
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(HTTP_CONNECT_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(HTTP_READ_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+            .build()
+
+        val httpDataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
 
         val dataSourceFactory = DefaultDataSource.Factory(activity, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
