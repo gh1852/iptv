@@ -19,7 +19,7 @@ class PlaybackFailureDialogCoordinator(
         if (playbackFailureDialog?.isShowing == true) return
 
         playbackFailureDialogAnimatedDismiss = false
-        val dialogView = activity.layoutInflater.inflate(R.layout.dialog_playback_failure_cctv, null)
+        val dialogView = activity.fixedFontScaleInflater().inflate(R.layout.dialog_playback_failure_cctv, null)
         dialogView.findViewById<TextView>(R.id.failureTitle).text = activity.getString(R.string.playback_failed_title)
         dialogView.findViewById<TextView>(R.id.failureMessage).text =
             activity.getString(R.string.playback_failed_message, channel.name)

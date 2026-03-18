@@ -136,7 +136,7 @@ jobs:
           else
             ALL_LOGS=$(git log --no-merges --pretty=format:'- %s')
           fi
-          CHANGELOG=$(echo "$ALL_LOGS" | grep -E '^- (feat|fix|perf)' | head -n 2 || true)
+          CHANGELOG=$(echo "$ALL_LOGS" | grep -E '^- (feat|fix|perf)' | head -n 5 || true)
 
           if [[ -z "$CHANGELOG" ]]; then
             CHANGELOG="See GitHub release notes"

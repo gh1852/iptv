@@ -19,6 +19,7 @@ import com.jons.iptv.R
 import com.jons.iptv.data.AppUpdateRepository
 import com.jons.iptv.data.UpdateInfo
 import com.jons.iptv.ui.dialog.CctvStyleDialogAnimator
+import com.jons.iptv.ui.dialog.fixedFontScaleInflater
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -61,6 +62,33 @@ class AppUpdateCoordinator(
         }
     }
 
+    enum class CheckUpdateResult { HAS_UPDATE, NO_UPDATE, FAILED }
+
+    fun checkUpdateManually(onResult: (CheckUpdateResult) -> Unit) {
+        activity.lifecycleScope.launch {
+            runCatching { appUpdateRepository.fetchLatest() }
+                .onSuccess { latest ->
+                    val packageInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
+                    val currentVersionCode = PackageInfoCompat.getLongVersionCode(packageInfo).toInt()
+                    val hasNew = appUpdateRepository.hasNewVersion(
+                        latestVersionCode = latest.versionCode,
+                        currentVersionCode = currentVersionCode
+                    )
+                    val forceUpdate = latest.force || currentVersionCode < latest.minSupportedVersionCode
+                    if (hasNew || forceUpdate) {
+                        onResult(CheckUpdateResult.HAS_UPDATE)
+                        showUpdateDialog(latest, forceUpdate)
+                    } else {
+                        onResult(CheckUpdateResult.NO_UPDATE)
+                    }
+                }
+                .onFailure { throwable ->
+                    Log.w(logTag, "Update check failed", throwable)
+                    onResult(CheckUpdateResult.FAILED)
+                }
+        }
+    }
+
     fun showUpdateDialog(updateInfo: UpdateInfo, forceUpdate: Boolean) {
         if (activity.isFinishing || activity.isDestroyed) return
         if (updateDialog?.isShowing == true) return
@@ -76,7 +104,7 @@ class AppUpdateCoordinator(
         }
 
         updateDialogAnimatedDismiss = false
-        val dialogView = activity.layoutInflater.inflate(R.layout.dialog_playback_failure_cctv, null)
+        val dialogView = activity.fixedFontScaleInflater().inflate(R.layout.dialog_playback_failure_cctv, null)
         dialogView.findViewById<TextView>(R.id.failureTitle).text = activity.getString(R.string.update_dialog_title)
         dialogView.findViewById<TextView>(R.id.failureMessage).text = message
 
@@ -98,9 +126,22 @@ class AppUpdateCoordinator(
                 }
             }
             show()
+            val screenHeight = activity.resources.displayMetrics.heightPixels
+            val maxHeight = (screenHeight * 0.8f).toInt()
+            val contentHeight = dialogView.measuredHeight.takeIf { it > 0 }
+                ?: run {
+                    dialogView.measure(
+                        android.view.View.MeasureSpec.makeMeasureSpec(
+                            activity.resources.getDimensionPixelSize(R.dimen.update_dialog_fixed_width),
+                            android.view.View.MeasureSpec.EXACTLY
+                        ),
+                        android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+                    )
+                    dialogView.measuredHeight
+                }
             window?.setLayout(
                 activity.resources.getDimensionPixelSize(R.dimen.update_dialog_fixed_width),
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                if (contentHeight > maxHeight) maxHeight else ViewGroup.LayoutParams.WRAP_CONTENT
             )
             CctvStyleDialogAnimator.playDialogEnterAnimation(this)
 
@@ -141,7 +182,7 @@ class AppUpdateCoordinator(
             return
         }
 
-        val dialogView = activity.layoutInflater.inflate(R.layout.dialog_update_progress, null)
+        val dialogView = activity.fixedFontScaleInflater().inflate(R.layout.dialog_update_progress, null)
         val progressBar = dialogView.findViewById<ProgressBar>(R.id.progressBar)
         val progressText = dialogView.findViewById<TextView>(R.id.progressPercent)
 

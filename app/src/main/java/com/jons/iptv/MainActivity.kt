@@ -22,6 +22,7 @@ import com.jons.iptv.input.MainKeyEventRouter
 import com.jons.iptv.playback.PlayerEngineCoordinator
 import com.jons.iptv.ui.GroupedChannelAdapter
 import com.jons.iptv.ui.dialog.PlaybackFailureDialogCoordinator
+import com.jons.iptv.ui.dialog.SettingsDialog
 import com.jons.iptv.ui.menu.MenuFocusCoordinator
 import com.jons.iptv.update.AppUpdateCoordinator
 import kotlinx.coroutines.launch
@@ -35,6 +36,8 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_LAST_CHANNEL = "last_channel_store"
         private const val KEY_LAST_CHANNEL_CATEGORY = "last_channel_category"
         private const val KEY_LAST_CHANNEL_NAME = "last_channel_name"
+        private const val PREF_SETTINGS = "settings"
+        private const val KEY_AUTO_CHECK_UPDATE = "auto_check_update"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -50,7 +53,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var menuFocusCoordinator: MenuFocusCoordinator
     private lateinit var playerEngineCoordinator: PlayerEngineCoordinator
     private lateinit var keyEventRouter: MainKeyEventRouter
-    private var hasDeferredUpdateCheck = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -101,6 +103,10 @@ class MainActivity : AppCompatActivity() {
         initList()
         initMenuInteractions()
         loadChannels()
+        val prefs = getSharedPreferences(PREF_SETTINGS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_AUTO_CHECK_UPDATE, true)) {
+            appUpdateCoordinator.checkUpdateSilently()
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -178,6 +184,9 @@ class MainActivity : AppCompatActivity() {
         binding.playerContainer.setOnClickListener {
             toggleMenuVisibility(moveFocusToPlayerWhenHide = true)
         }
+        binding.btnSettings.setOnClickListener {
+            openSettings()
+        }
     }
 
     private fun loadChannels() {
@@ -202,8 +211,6 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         showMenu()
                     }
-
-                    triggerUpdateCheckAfterFirstRender()
                 }
                 .onFailure {
                     binding.loadingContainer.visibility = View.GONE
@@ -276,16 +283,17 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun triggerUpdateCheckAfterFirstRender() {
-        if (hasDeferredUpdateCheck) return
-        hasDeferredUpdateCheck = true
-        lifecycleScope.launch {
-            checkUpdateSilently()
-        }
-    }
-
-    private fun checkUpdateSilently() {
-        appUpdateCoordinator.checkUpdateSilently()
+    private fun openSettings() {
+        hideMenu(moveFocusToPlayer = false)
+        val prefs = getSharedPreferences(PREF_SETTINGS, Context.MODE_PRIVATE)
+        SettingsDialog(
+            context = this,
+            isAutoUpdateEnabled = { prefs.getBoolean(KEY_AUTO_CHECK_UPDATE, true) },
+            onAutoUpdateChanged = { enabled ->
+                prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATE, enabled).apply()
+            },
+            onCheckUpdateNow = { onResult -> appUpdateCoordinator.checkUpdateManually(onResult) }
+        ).show()
     }
 
     override fun onResume() {

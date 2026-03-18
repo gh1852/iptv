@@ -8,7 +8,7 @@
 
     <LinearLayout
         android:id="@+id/menuContainer"
-        android:layout_width="420dp"
+        android:layout_width="360dp"
         android:layout_height="match_parent"
         android:background="@color/panel_background"
         android:orientation="vertical"
@@ -26,13 +26,31 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:text="@string/channel_groups"
-                    android:textColor="@android:color/white"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/channel_groups"
+                        android:textColor="@android:color/white"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/btnSettings"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings"
+                        android:src="@drawable/ic_settings"
+                        android:tint="@android:color/white" />
+
+                </LinearLayout>
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/groupedChannelRecycler"
